@@ -13,7 +13,7 @@ if __name__ == "__main__":
         import_models()
 
         # create the tables using this commands
-        Base.metadata.create_all(engine)
+        # Base.metadata.create_all(engine)
 
         # load the login application here
 

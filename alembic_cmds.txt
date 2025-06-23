@@ -1,0 +1,14 @@
+alembic init alembic
+
+# makemigrations
+alembic revision --autogenerate -m "you message"
+
+# migrate
+alembic upgrade head
+
+# if upgrading the database
+alembic upgrade <unique number of the migration first 4 letters>
+ - alembic upgrade 75b6
+
+# revision downgrade (go down)
+alembic downgrade -1
