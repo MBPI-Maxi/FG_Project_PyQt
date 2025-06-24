@@ -1,22 +1,25 @@
 from config.db import is_connected, engine
-from models import Base
+from app.auth.login import LoginForm
 
-# this should be imported so Base(declarative_base) will able to read the EndorsementModel
-def import_models():
-    from models.Endorsement import EndorsementModel
+from PyQt6.QtWidgets import QApplication
+from PyQt6.QtCore import QTimer
+import sys
 
 if __name__ == "__main__":
     if is_connected == True:
         print("Database is connected.")
-
-        # import the models here
-        import_models()
-
-        # create the tables using this commands
-        # Base.metadata.create_all(engine)
-
+        
+        app = QApplication(sys.argv)
+        
         # load the login application here
+        login_view = LoginForm(engine=engine)
+        login_view.show()
 
 
+        # timer sample
+        # QTimer.singleShot(60000, login_view.close)
+
+
+        sys.exit(app.exec())
     else:
         print(f"Failed to connect to the database: {is_connected}")

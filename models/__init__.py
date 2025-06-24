@@ -4,3 +4,4 @@ from sqlalchemy.orm import declarative_base
 Base = declarative_base()
 
 from .Endorsement import EndorsementModel
+from .User import User, AuthLog
