@@ -4,6 +4,19 @@ from enum import Enum
 class ITCredentials(Enum):
     SUPER_PASSWORD = "**itadmin**"
 
+class AuthLogStatus(Enum):
+    SUCCESS = "SUCCESS"
+    FAILED = "FAILED"
+    
+    @staticmethod
+    def get_event_type(event: str):
+        event_type = {
+            "registration": "REGISTRATION",
+            "login": "LOGIN"
+        }
+
+        return event_type.get(event, None)
+
 # for user table
 class UserRole(Enum):
     ADMIN = "ADMIN"
@@ -26,3 +39,4 @@ class CategoryEnum(Enum):
 class StatusEnum(Enum):
     PASSED = "PASSED"
     FAILED = "FAILED"
+

@@ -347,12 +347,13 @@ class SimpleIncomingForm(QWidget):
 
 # --- MAIN DASHBOARD CLASS ---
 class FrmDashboard(QMainWindow):
-    def __init__(self, username, connection, login_window):
+    def __init__(self, username=None, connection=None, login_window=None):
         super().__init__()
-        self.username = username;
-        self.conn = connection;
+        self.username = username
+        # self.conn = connection
         self.login_window = login_window
-        self.setWindowTitle("Application Dashboard");
+
+        self.setWindowTitle("Application Dashboard")
         self.setGeometry(100, 100, 1300, 800)
         self.management_submenu_visible = False
         self.icon_maximize = fa.icon('fa5s.expand-arrows-alt', color='#ecf0f1')
@@ -362,47 +363,47 @@ class FrmDashboard(QMainWindow):
         self.init_ui()
 
     def init_ui(self):
-        self.setWindowIcon(fa.icon('fa5s.cogs', color='gray'));
+        self.setWindowIcon(fa.icon('fa5s.cogs', color='gray'))
         main_widget = QWidget()
-        main_layout = QHBoxLayout(main_widget);
-        main_layout.setContentsMargins(0, 0, 0, 0);
+        main_layout = QHBoxLayout(main_widget)
+        main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
-        side_menu = self.create_side_menu();
+        side_menu = self.create_side_menu()
         main_layout.addWidget(side_menu)
-        self.stacked_widget = QStackedWidget();
+        self.stacked_widget = QStackedWidget()
         main_layout.addWidget(self.stacked_widget)
-        self.dashboard_page = self.create_page("Dashboard", f"Welcome, {self.username}!")
-        self.material_form_page = SimpleIncomingForm(self.username, self.conn)
+        # self.dashboard_page = self.create_page("Dashboard", f"Welcome, {self.username}!")
+        # self.material_form_page = SimpleIncomingForm(self.username, self.conn)
         self.users_page = self.create_page("User Management", "Manage users here.")
         self.logs_page = self.create_page("System Logs", "View system logs here.")
-        self.stacked_widget.addWidget(self.dashboard_page);
-        self.stacked_widget.addWidget(self.material_form_page)
-        self.stacked_widget.addWidget(self.users_page);
+        # self.stacked_widget.addWidget(self.dashboard_page)
+        # self.stacked_widget.addWidget(self.material_form_page)
+        self.stacked_widget.addWidget(self.users_page)
         self.stacked_widget.addWidget(self.logs_page)
-        self.setCentralWidget(main_widget);
-        self.setup_status_bar();
-        self.apply_styles();
+        self.setCentralWidget(main_widget)
+        # self.setup_status_bar()
+        self.apply_styles()
         self.update_maximize_button()
 
     def setup_status_bar(self):
-        self.status_bar = QStatusBar();
+        self.status_bar = QStatusBar()
         self.setStatusBar(self.status_bar)
         self.status_bar.showMessage(f"Ready | Logged in as: {self.username}")
-        self.db_status_icon_label = QLabel();
+        self.db_status_icon_label = QLabel()
         self.db_status_icon_label.setFixedSize(QSize(20, 20))
-        self.db_status_text_label = QLabel();
+        self.db_status_text_label = QLabel()
         self.time_label = QLabel()
-        self.status_bar.addPermanentWidget(self.db_status_icon_label);
-        self.status_bar.addPermanentWidget(self.db_status_text_label);
+        self.status_bar.addPermanentWidget(self.db_status_icon_label)
+        self.status_bar.addPermanentWidget(self.db_status_text_label)
         self.status_bar.addPermanentWidget(self.time_label)
-        self.time_timer = QTimer(self);
-        self.time_timer.timeout.connect(self.update_time);
-        self.time_timer.start(1000);
+        self.time_timer = QTimer(self)
+        self.time_timer.timeout.connect(self.update_time)
+        self.time_timer.start(1000)
         self.update_time()
-        self.db_check_timer = QTimer(self);
-        self.db_check_timer.timeout.connect(self.check_db_status);
-        self.db_check_timer.start(5000);
-        self.check_db_status()
+        self.db_check_timer = QTimer(self)
+        # self.db_check_timer.timeout.connect(self.check_db_status)
+        self.db_check_timer.start(5000)
+        # self.check_db_status()
 
     def update_time(self):
         self.time_label.setText(f" | {datetime.datetime.now().strftime('%b %d, %Y  %I:%M:%S %p')} ")
@@ -411,10 +412,10 @@ class FrmDashboard(QMainWindow):
         try:
             with self.conn.cursor() as cursor:
                 cursor.execute("SELECT 1")
-            self.db_status_icon_label.setPixmap(self.icon_db_ok.pixmap(QSize(16, 16)));
+            self.db_status_icon_label.setPixmap(self.icon_db_ok.pixmap(QSize(16, 16)))
             self.db_status_text_label.setText("DB Connected")
         except (psycopg2.OperationalError, psycopg2.InterfaceError):
-            self.db_status_icon_label.setPixmap(self.icon_db_fail.pixmap(QSize(16, 16)));
+            self.db_status_icon_label.setPixmap(self.icon_db_fail.pixmap(QSize(16, 16)))
             self.db_status_text_label.setText("DB Disconnected")
 
     def apply_styles(self):
@@ -495,7 +496,7 @@ class FrmDashboard(QMainWindow):
         separator.setObjectName("Separator")
         self.btn_maximize = QPushButton("  Maximize")
         self.btn_maximize.clicked.connect(self.toggle_maximize)
-        self.btn_logout = QPushButton("  Logout");
+        self.btn_logout = QPushButton("Logout")
         self.btn_logout.setIcon(fa.icon('fa5s.sign-out-alt', color='#ecf0f1'))
         self.btn_logout.clicked.connect(self.logout)
         side_menu_layout.addWidget(profile_frame)
@@ -503,7 +504,7 @@ class FrmDashboard(QMainWindow):
         side_menu_layout.addWidget(self.btn_dashboard)
         side_menu_layout.addWidget(self.btn_management)
         side_menu_layout.addWidget(self.management_submenu_container)
-        side_menu_layout.addStretch(1);
+        side_menu_layout.addStretch(1)
         side_menu_layout.addWidget(self.btn_maximize)
         side_menu_layout.addWidget(self.btn_logout)
         return side_menu_widget
@@ -529,13 +530,13 @@ class FrmDashboard(QMainWindow):
         start, end = ((target_height, 0) if self.management_submenu_visible else (0, target_height))
         self.animation.setStartValue(start)
         self.animation.setEndValue(end)
-        self.management_submenu_visible = not self.management_submenu_visible;
+        self.management_submenu_visible = not self.management_submenu_visible
         self.animation.start()
 
     def create_page(self, title, message):
         page = QWidget();
         layout = QVBoxLayout(page)
-        layout.setContentsMargins(40, 40, 40, 40);
+        layout.setContentsMargins(40, 40, 40, 40)
         title_label = QLabel(title)
         title_label.setFont(QFont("Segoe UI", 24, QFont.Weight.Bold))
         title_label.setObjectName("PageTitle")
@@ -544,47 +545,51 @@ class FrmDashboard(QMainWindow):
         message_label.setWordWrap(True)
         layout.addWidget(title_label)
         layout.addWidget(message_label)
-        layout.addStretch();
+        layout.addStretch()
         return page
 
     def logout(self):
-        self.close(); self.login_window.show()
+        self.close()
+        # show the login ui again.
+        self.login_window.show()
 
     def closeEvent(self, event):
-        self.login_window.close(); event.accept()
+        self.login_window.close()
+        event.accept()
 
 
 # --- MAIN EXECUTION BLOCK ---
 
-# if __name__ == '__main__':
-#     app = QApplication(sys.argv)
+if __name__ == '__main__':
+    app = QApplication(sys.argv)
 
 
-#     class DummyLogin(QWidget):
-#         def show(self): print("Logout successful.")
+    class DummyLogin(QWidget):
+        def show(self): print("Logout successful.")
 
-#         def close(self): print("Application exit."); QApplication.quit()
+        def close(self): print("Application exit."); QApplication.quit()
 
 
-#     DB_CONFIG = {
-#         "dbname": "dbinventory", "user": "postgres", "password": "mbpi",
-#         "host": "192.168.1.13", "port": "5432"
-#     }
+    DB_CONFIG = {
+        "dbname": "dbinventory", "user": "postgres", "password": "mbpi",
+        "host": "192.168.1.13", "port": "5432"
+    }
 
-#     try:
-#         print("Connecting to the database...")
-#         connection = psycopg2.connect(**DB_CONFIG)
-#         print("Connection successful.")
+    try:
+        print("Connecting to the database...")
+        connection = psycopg2.connect(**DB_CONFIG)
+        print("Connection successful.")
         
-#         create_table_if_not_exists(connection)
+        create_table_if_not_exists(connection)
         
-#         dashboard = FrmDashboard("admin_user", connection, DummyLogin())
-#         dashboard.show()
-#         sys.exit(app.exec())
+        dashboard = FrmDashboard("admin_user", connection, DummyLogin())
+        dashboard.show()
+        sys.exit(app.exec())
 
-#     except psycopg2.Error as e:
-#         QMessageBox.critical(None, "Database Error", f"A database error occurred: {e}")
-#         sys.exit(1)
-#     except Exception as e:
-#         QMessageBox.critical(None, "Application Error", f"An unexpected error occurred: {e}")
-#         sys.exit(1)
+    except psycopg2.Error as e:
+        QMessageBox.critical(None, "Database Error", f"A database error occurred: {e}")
+        sys.exit(1)
+    except Exception as e:
+        QMessageBox.critical(None, "Application Error", f"An unexpected error occurred: {e}")
+        sys.exit(1)
+

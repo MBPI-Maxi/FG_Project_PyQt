@@ -12,6 +12,8 @@ from PyQt6.QtCore import Qt, QSize
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.exc import SQLAlchemyError
 
+from old_files.FrmDashboard import FrmDashboard
+
 import sys
 import hashlib
 import socket
@@ -24,59 +26,44 @@ from models import User, AuthLog
 from app.auth.registration import Registration
 
 # helpers
-from app.helpers import button_cursor_pointer
+from app.helpers import button_cursor_pointer, record_auth_log
 
 # super password
-from constants.Enums import ITCredentials
+from constants.Enums import ITCredentials, AuthLogStatus
 
 class LoginForm(QWidget):
-    def __init__(self, engine, *args, **kwargs):
+    def __init__(self, session_factory, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        
-        try:
-            self.Session = sessionmaker(engine)
-            self.dashboard_window = None
-        except SQLAlchemyError as e:
-            QMessageBox.critical(
-                None, "Database Error",
-                f"Could not connect to database: {e}\n\n"
-                "Please check your connection details and ensure the server is running."
-            )
-            sys.exit(1)
-        
-        self.init_ui()
-
-    def init_ui(self):
         self.setWindowTitle("User Login")
         self.setFixedSize(400, 550)
-        
-        main_layout = QVBoxLayout()
-        main_layout.setContentsMargins(40, 40, 40, 40)
-        main_layout.setSpacing(20)
-        main_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        self.main_layout = QVBoxLayout()
+        self.main_layout.setContentsMargins(40, 40, 40, 40)
+        self.main_layout.setSpacing(20)
+        self.main_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
         # LOGO
-        logo_label = QLabel()
+        self.logo_label = QLabel()
         pixmap = QPixmap(
             self.style()
             .standardIcon(self.style().StandardPixmap.SP_ComputerIcon)
             .pixmap(QSize(80, 80))
         )
-        logo_label.setPixmap(pixmap)
-        logo_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.logo_label.setPixmap(pixmap)
+        self.logo_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        # Title
-        title_label = QLabel("Welcome Back")
-        title_label.setFont(QFont("Segoe UI", 22, QFont.Weight.Bold))
-        title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        # TITLE
+        self.title_label = QLabel("Welcome Back")
+        self.title_label.setFont(QFont("Segoe UI", 22, QFont.Weight.Bold))
+        self.title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        # Subtitle
-        subtitle_label = QLabel("Sign in to continue")
-        subtitle_label.setFont(QFont("Segoe UI", 12))
-        subtitle_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        subtitle_label.setStyleSheet("color:#555;")
+        # SUBTITLE
+        self.subtitle_label = QLabel("Sign in to continue")
+        self.subtitle_label.setFont(QFont("Segoe UI", 12))
+        self.subtitle_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.subtitle_label.setStyleSheet("color:#555;")
 
-        # Input fields
+        # INPUT FIELDS
         self.username_input = QLineEdit()
         self.username_input.setPlaceholderText("Username")
 
@@ -84,28 +71,45 @@ class LoginForm(QWidget):
         self.password_input.setPlaceholderText("Password")
         self.password_input.setEchoMode(QLineEdit.EchoMode.Password)
 
-        # Buttons
+        # BUTTONS
         self.login_button = QPushButton("LOGIN")
         self.login_button.setFixedHeight(45)
-
         self.create_user_button = QPushButton("Create New User")
         self.create_user_button.setObjectName("CreateUserButton")
 
-        # Add widgets to layout
-        main_layout.addWidget(logo_label)
-        main_layout.addWidget(title_label)
-        main_layout.addWidget(subtitle_label)
-        main_layout.addSpacing(20)
-        main_layout.addWidget(self.username_input)
-        main_layout.addWidget(self.password_input)
-        main_layout.addSpacing(10)
-        main_layout.addWidget(self.login_button)
-        main_layout.addStretch(1)
-        main_layout.addWidget(self.create_user_button)
+        # ADD WIDGET TO LAYOUT
+        self.main_layout.addWidget(self.logo_label)
+        self.main_layout.addWidget(self.title_label)
+        self.main_layout.addWidget(self.subtitle_label)
+        self.main_layout.addSpacing(20)
+        self.main_layout.addWidget(self.username_input)
+        self.main_layout.addWidget(self.password_input)
+        self.main_layout.addSpacing(10)
+        self.main_layout.addWidget(self.login_button)
+        self.main_layout.addStretch(1)
+        self.main_layout.addWidget(self.create_user_button)
 
-        self.setLayout(main_layout)
+        # sample line edit
+        # test_input = QLineEdit()
+        # test_input.setInputMask("0000 - 0000 - 0000;_")
+        # main_layout.addWidget(test_input)
+
+        self.setLayout(self.main_layout)
         self.apply_styles()
         self.connect_signals()
+
+        try:
+            # self.Session = sessionmaker(engine)
+            self.Session = session_factory
+            self.dashboard_window = None
+        except SQLAlchemyError as e:
+            QMessageBox.critical(
+                None, "Database Error",
+                f"Could not connect to database: {e}\n\n"
+                "Please check your connection details and ensure the server is running."
+            )
+
+            sys.exit(1)
     
     def apply_styles(self):
         button_cursor_pointer(self.login_button)
@@ -164,27 +168,33 @@ class LoginForm(QWidget):
                 )
 
                 # log failed attempt
-                log = AuthLog(
-                    username=username,
-                    event_type="LOGIN",
-                    status="FAILED",
-                    additional_info=f"Attempted from {workstation_name}"
+                record_auth_log(
+                    session=session,
+                    data_required={
+                        "username": username,
+                        "event_type": AuthLogStatus.get_event_type("login"),
+                        "status": AuthLogStatus.FAILED.value,
+                        "additional_info": f"Attempted from {workstation_name}"
+                    },
+                    auth_log_model=AuthLog,
+                    commit=True
                 )
-                session.add(log)
-                session.commit()
-
+                
                 return
 
             # login is successful
-            log = AuthLog(
-                user_id=user.user_id,
-                username=user.username,
-                event_type="LOGIN",
-                status="SUCCESS",
-                additional_info=f"Logged in from {workstation_name}",
+            record_auth_log(
+                session=session,
+                data_required={
+                    "user_id": user.user_id,
+                    "username": user.username,
+                    "event_type": AuthLogStatus.get_event_type("login"),
+                    "status": AuthLogStatus.SUCCESS.value,
+                    "additional_info": f"Logged in from {workstation_name}"
+                },
+                auth_log_model=AuthLog,
+                commit=True
             )
-            session.add(log)
-            session.commit()
 
             QMessageBox.information(
                 self,
@@ -193,7 +203,14 @@ class LoginForm(QWidget):
             )
 
             # TODO: Open dashboard or next window here
+            
+            # close the login interface after the 
+            self.close()
 
+            # open the main dashboard for the user
+            # self.dashboard = FrmDashboard(username=username, login_window=self)
+            # self.dashboard.show()
+            
         except SQLAlchemyError as e:
             QMessageBox.critical(
                 self, 
