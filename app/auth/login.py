@@ -9,15 +9,10 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtGui import QFont, QPixmap
 from PyQt6.QtCore import Qt, QSize
-from sqlalchemy.orm import sessionmaker
+# from sqlalchemy.orm import sessionmaker
 from sqlalchemy.exc import SQLAlchemyError
-
-from old_files.FrmDashboard import FrmDashboard
-
-import sys
-import hashlib
-import socket
-import os
+from app.dashboard.dashboard import FGDashboard
+from app.StyledMessage import StyledMessageBox
 
 # import models here
 from models import User, AuthLog
@@ -30,6 +25,11 @@ from app.helpers import button_cursor_pointer, record_auth_log
 
 # super password
 from constants.Enums import ITCredentials, AuthLogStatus
+
+import sys
+import hashlib
+import socket
+import os
 
 class LoginForm(QWidget):
     def __init__(self, session_factory, *args, **kwargs):
@@ -102,6 +102,10 @@ class LoginForm(QWidget):
             # self.Session = sessionmaker(engine)
             self.Session = session_factory
             self.dashboard_window = None
+
+            # REGISTRATION INSTANCE
+            # self.registration_widget = Registration(session_factory=self.Session)
+
         except SQLAlchemyError as e:
             QMessageBox.critical(
                 None, "Database Error",
@@ -196,27 +200,41 @@ class LoginForm(QWidget):
                 commit=True
             )
 
-            QMessageBox.information(
+            StyledMessageBox.information(
                 self,
                 "Login Success",
-                f"Welcome, {user.username}!"
+                f"Welcome, {user.username}"
             )
 
-            # TODO: Open dashboard or next window here
+            # if the login is successful get the role of the current user with username of that.
             
-            # close the login interface after the 
-            self.close()
 
-            # open the main dashboard for the user
-            # self.dashboard = FrmDashboard(username=username, login_window=self)
-            # self.dashboard.show()
+            # OPEN THE MAIN DASHBAORD
+            self.open_dashboard_main_window(
+                username=username,
+                role=user.role.value,
+                open_win=True
+            )
             
         except SQLAlchemyError as e:
-            QMessageBox.critical(
-                self, 
-                "Database Error", 
-                f"An error occurred during login: {e}"
+            StyledMessageBox.critical(
+                self,
+                "Database Error",
+                f"An error occured during login: {e}"
             )
+    
+    def open_dashboard_main_window(self, username, role, open_win=False):
+        if open_win:
+            # close the login interface
+            self.close()
+            
+            # OPEN THE DASHBOARD WINDOW
+            self.dashboard_window = FGDashboard(
+                username=username, 
+                role=role, 
+                login_widget=self
+            )
+            self.dashboard_window.show()
     
     def open_registration_form(self):
         super_password, ok = QInputDialog.getText(
@@ -228,12 +246,12 @@ class LoginForm(QWidget):
         
         if ok:
             if super_password == ITCredentials.SUPER_PASSWORD.value:
-                self.registration = Registration(session_factory=self.Session)
-                self.registration.show()
+                self.registration_widget = Registration(session_factory=self.Session)
+                self.registration_widget.show()
             else:
-                QMessageBox.warning(
-                    self, 
-                    "Access Denied", 
-                    "Incorrect super password."
+                StyledMessageBox.warning(
+                    self,
+                    "Access Denied",
+                    "Incorrect super password"
                 )
         
