@@ -1,28 +1,58 @@
 #Endorsement-label {
     color: black;
 }
+
 QLabel {
-    color: black;
+    font-weight: 600;
+    font-size: 14px;
+    color: #333;
 }
 
+/* save button */
 #endorsement-save-btn {
-    font-weight: 700;
+    background-color: #3a9eea;
+    color: white;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 10px 15px;
+    border-radius: 5px;
+    border: none;
+    max-width: 120px;
 }
 
 #endorsement-save-btn:hover {
-    background-color: rgb(203, 223, 26);
+    background-color: #317dc4;
+    color: white;
+}
+
+/* endorsement form */
+QWidget#EndorsementForm {
+    background-color: #f5f7fa;
+    border-radius: 10px;
+    padding: 20px;
+}
+
+QLineEdit, 
+QDateEdit, 
+QComboBox {
+    background-color: white;
     color: black;
-}
-
-QLineEdit {
-    max-width: 300px;
-}
-
-/* QLineEdit, QComboBox, QDateEdit, QDoubleSpinBox {
     padding: 6px;
     border: 1px solid #ccc;
     border-radius: 6px;
-    background-color: #fdfdfd;
     font-size: 14px;
-} */
+}
 
+QDoubleSpinBox {
+    background-color: white;
+    color: black;
+}
+
+/* combobox dropdown display */
+QComboBox QAbstractItemView {
+    background-color: white;
+    color: black;
+    selection-background-color: #e6f2ff; 
+    border: 1px solid #ccc;
+    font-size: 14px;
+}

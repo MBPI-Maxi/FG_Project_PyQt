@@ -1,7 +1,7 @@
 from PyQt6.QtWidgets import (
     QWidget, QLabel, QVBoxLayout, QHBoxLayout,
     QLineEdit, QDateEdit, QComboBox, QDoubleSpinBox, QPushButton,
-    
+    QCheckBox
 )
 from PyQt6.QtCore import QDate, Qt 
 from pydantic import BaseModel, Field, ValidationError, field_validator
@@ -10,6 +10,7 @@ from constants.Enums import StatusEnum, CategoryEnum
 from app.StyledMessage import StyledMessageBox
 
 import os
+import qtawesome as qta
 
 
 # --- FORM SCHEMA IS CREATED HERE FOR SERIALIZATION AND VALIDATION ---
@@ -52,7 +53,7 @@ class EndorsementFormSchema(BaseModel):
         description="Weight per Lot"
     ) # gt=0 ensures it's greater than 0
     t_status: StatusEnum = Field(
-        default=StatusEnum.FAILED, 
+        default=StatusEnum.PASSED, 
         description="Status of Endorsement"
     )
     t_endorsed_by: str = Field(
@@ -106,11 +107,15 @@ class EndorsementView(QWidget):
         def create_input_row(label_text, widget, field_name, error_label_name):
             h_layout = QHBoxLayout()
             label = QLabel(label_text)
-            h_layout.addWidget(label)
+            label.setFixedWidth(200) # Or whatever consistent width
+            
+            h_layout.addWidget(label) 
             h_layout.addWidget(widget)
             
+            widget.setFixedWidth(250) # <-- consistent width here
+
             error_label = QLabel("")
-            error_label.setStyleSheet("color: red; font-size: 14px;") # error label font size
+            error_label.setStyleSheet("color: red; font-size: 12px;") # error label font size
             error_label.setObjectName(f"{field_name}_error_label")
             h_layout.addWidget(error_label)
             
@@ -121,28 +126,56 @@ class EndorsementView(QWidget):
         
         # 1. Reference Number
         self.t_refno_input = QLineEdit()
+        # self.t_refno_input.setFixedWidth(250)
         create_input_row("Reference Number:", self.t_refno_input, "t_refno", "t_refno_error")
 
         # 2. Date Endorsed
         self.t_date_endorsed_input = QDateEdit(calendarPopup=True)
+        # self.t_date_endorsed_input.setFixedWidth(250)
         self.t_date_endorsed_input.setDate(QDate.currentDate())
+        
         create_input_row("Date Endorsed:", self.t_date_endorsed_input, "t_date_endorsed", "t_date_endorsed_error")
 
         # 3. Category
         self.t_category_input = QComboBox()
         for category in CategoryEnum:
             self.t_category_input.addItem(category.value, category) # Store enum object as user data
-        
+    
         # create the input row
         create_input_row("Category:", self.t_category_input, "t_category", "t_category_error")
 
         # 4. Product Code
         self.t_prodcode_input = QLineEdit()
+        # self.t_prodcode_input.setFixedWidth(250)
+        
         create_input_row("Product Code:", self.t_prodcode_input, "t_prodcode", "t_prodcode_error")
 
         # 5. Whole Lot Number
+        # checkbox for the whole lot number
+
+        # TODO FIX THIS LOT NUMBER CODE TO WORK WITH THE QCHECKBOX! 
+        self.t_use_whole_lot_checkbox = QCheckBox("Use whole lot number")
         self.t_lotnumberwhole_input = QLineEdit()
-        create_input_row("Whole Lot Number:", self.t_lotnumberwhole_input, "t_lotnumberwhole", "t_lotnumberwhole_error")
+
+        def toggle_lot_number_mask(state):
+            if state == Qt.CheckState.Checked:
+                # Whole lot: Example -> 1234AB - 5678CD
+                self.t_lotnumberwhole_input.setInputMask("0000AA - 0000AA;_")
+            else:
+                # Single lot: Example -> 1234AB
+                self.t_lotnumberwhole_input.setInputMask("0000AA;_")
+
+        self.t_use_whole_lot_checkbox.stateChanged.connect(toggle_lot_number_mask)
+
+        # default mask
+        self.t_lotnumberwhole_input.setInputMask("0000AA;_")
+
+        # create_input_row("Whole Lot Number:", self.t_lotnumberwhole_input, "t_lotnumberwhole", "t_lotnumberwhole_error")
+
+
+        # Add to layout
+        # create_input_row("Use Whole Lot:", self.t_use_whole_lot_checkbox, "t_use_whole_lot", "")
+        # create_input_row("Lot Number:", self.t_lotnumberwhole_input, "t_lotnumberwhole", "t_lotnumberwhole_error")
 
         # 6. Quantity (kg)
         self.t_qtykg_input = QDoubleSpinBox()
@@ -165,7 +198,7 @@ class EndorsementView(QWidget):
             self.t_status_input.addItem(status.value, status) # Store enum object as user data
         
         create_input_row("Status:", self.t_status_input, "t_status", "t_status_error")
-        self.t_status_input.setCurrentText(StatusEnum.FAILED.value) # Set default as per schema
+        self.t_status_input.setCurrentText(StatusEnum.PASSED.value) # Set default as per schema
 
         # 9. Endorsed By
         self.t_endorsed_by_input = QLineEdit()
@@ -297,33 +330,3 @@ class EndorsementView(QWidget):
                 self.setStyleSheet(f.read())
         except FileNotFoundError:
             print("Warning: Style file not found. Default styles will be used.")
-
-# --- Main application entry point for testing ---
-# if __name__ == "__main__":
-#     from PyQt6.QtWidgets import QApplication
-#     import sys
-#     from enum import Enum # Define Enums if constants/Enums.py is not available for testing
-
-#     # --- TEMPORARY ENUM DEFINITIONS FOR STANDALONE TESTING ---
-#     # If constants/Enums.py does not exist or is not in the path for direct execution,
-#     # define them here for this script to run independently.
-#     # In a real project, these should come from constants/Enums.py
-#     try:
-#         from constants.Enums import CategoryEnum, StatusEnum
-#     except ImportError:
-#         print("Warning: constants/Enums.py not found. Using temporary Enum definitions.")
-#         class CategoryEnum(str, Enum):
-#             MB = "MB"
-#             PB = "PB"
-#             OTHER = "OTHER"
-
-#         class StatusEnum(str, Enum):
-#             FAILED = "FAILED"
-#             PASSED = "PASSED"
-#             PENDING = "PENDING"
-#     # --- END TEMPORARY ENUM DEFINITIONS ---
-
-#     app = QApplication(sys.argv)
-#     window = EndorsementView()
-#     window.show()
-#     sys.exit(app.exec())
