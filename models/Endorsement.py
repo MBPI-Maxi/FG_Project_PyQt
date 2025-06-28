@@ -7,17 +7,18 @@ from sqlalchemy import (
     Integer,
     String, 
     Float, 
-    func
+    func,
+    ForeignKey
 )
 from constants.Enums import CategoryEnum, StatusEnum
 from models import Base
-# from sqlalchemy.orm import relationship, validates
+from sqlalchemy.orm import relationship
 
 class EndorsementModel(Base):
     __tablename__ = "tbl_endorsement_t1"
 
     t_id = Column(Integer(), primary_key=True, autoincrement=True)
-    t_refno = Column(String, nullable=False)
+    t_refno = Column(String, nullable=False, unique=True) # should be unique in order to be referenced in the ENDORSEMENTMODELT2
     t_date_endorsed = Column(Date, nullable=False)
     t_category = Column(Enum(CategoryEnum), nullable=False, default=CategoryEnum.MB.value)
     t_prodcode = Column(String, nullable=False)
@@ -30,3 +31,23 @@ class EndorsementModel(Base):
     is_deleted = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    # REVERSE lookup for t2
+    endorsement_t2_items = relationship(
+        "EndorsementModelT2", 
+        back_populates="endorsement_parent", 
+        cascade="all, delete-orphan"
+    )
+
+class EndorsementModelT2(Base):
+    __tablename__ = "tbl_endorsement_t2"
+
+    t_id = Column(Integer(), primary_key=True, autoincrement=True)
+    t_refno = Column(String, ForeignKey("tbl_endorsement_t1.t_refno"), nullable=False)
+    t_lotnumbersingle = Column(String(10), nullable=False)
+    t_qty = Column(Float, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now()) 
+    updated_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    endorsement_parent = relationship("EndorsementModel", back_populates="endorsement_t2_items")
+

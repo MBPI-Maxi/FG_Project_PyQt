@@ -1,3 +1,28 @@
 #Endorsement-label {
     color: black;
 }
+QLabel {
+    color: black;
+}
+
+#endorsement-save-btn {
+    font-weight: 700;
+}
+
+#endorsement-save-btn:hover {
+    background-color: rgb(203, 223, 26);
+    color: black;
+}
+
+QLineEdit {
+    max-width: 300px;
+}
+
+/* QLineEdit, QComboBox, QDateEdit, QDoubleSpinBox {
+    padding: 6px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    background-color: #fdfdfd;
+    font-size: 14px;
+} */
+

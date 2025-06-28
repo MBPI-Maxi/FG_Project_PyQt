@@ -31,11 +31,11 @@ class StyledMessageBox(QMessageBox):
         msg.setStandardButtons(QMessageBox.StandardButton.Ok)
 
         # own color for every class method
-        msg.setStyleSheet("""
-            QMessageBox QLabel {
-                color: blue;
-            }
-        """)
+        # msg.setStyleSheet("""
+        #     QMessageBox QLabel {
+        #         color: blue;
+        #     }
+        # """)
 
         msg.exec()
         
@@ -48,11 +48,22 @@ class StyledMessageBox(QMessageBox):
         msg.setWindowTitle(title)
         msg.setText(message)
         msg.setStandardButtons(QMessageBox.StandardButton.Ok)
-        msg.setStyleSheet("""
-            QMessageBox QLabel {
-                color: red;
-            }
-        """)
+        # msg.setStyleSheet("""
+        #     QMessageBox QLabel {
+        #         color: black;
+        #     }
+        #     QMessageBox {
+        #         background-color: white;
+        #     }
+        #     QMessageBox QPushButton {
+        #         background-color: #0078d7;
+        #         color: black;
+        #         min-width: 80px;
+        #         padding: 5px 10px;
+        #         border-radius: 4px;
+        #         font-size: 12px;
+        #     }  
+        # """)
         msg.exec()
         
         return msg
@@ -65,11 +76,11 @@ class StyledMessageBox(QMessageBox):
         msg.setText(message)
         msg.setStandardButtons(QMessageBox.StandardButton.Ok)
 
-        msg.setStyleSheet("""
-            QMessageBox QLabel {
-                color: red;
-            }
-        """)
+        # msg.setStyleSheet("""
+        #     QMessageBox QLabel {
+        #         color: red;
+        #     }
+        # """)
 
         msg.exec()
         

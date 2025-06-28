@@ -30,12 +30,14 @@ import sys
 import hashlib
 import socket
 import os
+import qtawesome as qta
 
 class LoginForm(QWidget):
     def __init__(self, session_factory, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.setWindowTitle("User Login")
         self.setFixedSize(400, 550)
+        self.setWindowIcon(qta.icon("fa5s.lock", color="steelblue"))
 
         self.main_layout = QVBoxLayout()
         self.main_layout.setContentsMargins(40, 40, 40, 40)
