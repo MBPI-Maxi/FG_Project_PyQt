@@ -45,13 +45,16 @@ def add_new_user(
 
     return new_user
 
+# FOR CREATING THE T_REF_NO
+def fetch_current_t_refno_in_endorsement(session: Type[Session], endorsement_model: Type[DeclarativeMeta]) -> str:
+    order_by_sequence = endorsement_model.t_id.desc()
+    endorsement_instance = session.query(endorsement_model).order_by(order_by_sequence).first()
+    
+    data_split = endorsement_instance.t_refno.split("-")
+    current_number = int(data_split[1])
 
-# FOR CREATING A LABELED INPUT WITH ERROR LABEL INLINE
-def modified_input_row(
-    label_text: str,
-    widget: Type[QLineEdit],
-    field_name: str,
-    error_label_name: str
-): 
-    pass
+    if endorsement_instance is None:
+        return "EF-1"
+    
+    return f"EF-{current_number + 1}"
     

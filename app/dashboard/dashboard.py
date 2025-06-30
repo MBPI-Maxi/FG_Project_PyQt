@@ -17,7 +17,8 @@ from app.views import (
 
 from PyQt6.QtGui import QFont
 from PyQt6.QtCore import QSize, QTimer
-from typing import Type
+from typing import Type, Callable
+from sqlalchemy.orm import Session
 from datetime import datetime
 
 
@@ -25,11 +26,20 @@ import qtawesome as qta
 import os
 
 class FGDashboard(QMainWindow):
-    def __init__(self, username, role, login_widget, *args, **kwargs):
+    def __init__(
+        self, 
+        session_factory: Callable[..., Session], 
+        username: str, 
+        role: str, 
+        login_widget: QWidget, 
+        *args, 
+        **kwargs
+    ):
         # self.management_submenu_visible = False
         super().__init__(*args, **kwargs)
         
         # initialization
+        self.Session = session_factory
         self.username = username
         self.role = role
         self.login_widget = login_widget
@@ -51,7 +61,7 @@ class FGDashboard(QMainWindow):
         self.setWindowTitle("FG Dashboard")
         self.setGeometry(100, 100, 1300, 800)
         # self.icon_maximize = qta.icon("fa5s.expand-arrows-alt", color="#ecf0f1")
-        self.setWindowIcon(qta.icon("fa5s.cogs", color="grey"))
+        self.setWindowIcon(qta.icon("fa5s.tachometer-alt", color="steelblue"))
 
         # MAIN WIDGET
         self.main_widget = QWidget()
@@ -70,7 +80,7 @@ class FGDashboard(QMainWindow):
 
         # INITIALIZED STACK (index by order)
         # INCOMING
-        self.add_stack_page("Endorsement", "Endorsement", EndorsementView())
+        self.add_stack_page("Endorsement", "Endorsement", EndorsementView(session_factory=self.Session))
         self.add_stack_page("QC Failed to Passed", "QC Failed to Passed", QCFailedToPassed())
         self.add_stack_page("QC Lab Excess", "QC Lab Excess", QCLabExcess())
         self.add_stack_page("Receiving Report", "Receiving Report", ReceivingReport())

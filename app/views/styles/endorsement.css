@@ -25,6 +25,12 @@ QLabel {
     color: white;
 }
 
+#endorsement-refno-input {
+    color: black;
+    background-color: rgb(221, 220, 220);
+    font-style: italic;
+}
+
 /* endorsement form */
 QWidget#EndorsementForm {
     background-color: #f5f7fa;
@@ -43,6 +49,16 @@ QComboBox {
     font-size: 14px;
 }
 
+QLineEdit:focus, 
+QDateEdit:focus, 
+QComboBox:focus,
+QDoubleSpinBox:focus {
+    border: 2px solid #3a9eea;  /* Same blue as your button */
+    background-color: white;
+    selection-background-color: #3a9eea;
+    selection-color: white;
+}
+
 QDoubleSpinBox {
     background-color: white;
     color: black;
@@ -55,4 +71,8 @@ QComboBox QAbstractItemView {
     selection-background-color: #e6f2ff; 
     border: 1px solid #ccc;
     font-size: 14px;
+}
+
+QCheckBox#endorsement-toggle-lot {
+    color: black;
 }

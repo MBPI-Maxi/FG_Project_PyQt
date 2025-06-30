@@ -9,11 +9,11 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtGui import QFont, QPixmap
 from PyQt6.QtCore import Qt, QSize
-# from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
+
 from app.dashboard.dashboard import FGDashboard
 from app.StyledMessage import StyledMessageBox
-
 # import models here
 from models import User, AuthLog
 
@@ -26,6 +26,8 @@ from app.helpers import button_cursor_pointer, record_auth_log
 # super password
 from constants.Enums import ITCredentials, AuthLogStatus
 
+from typing import Callable
+
 import sys
 import hashlib
 import socket
@@ -33,7 +35,7 @@ import os
 import qtawesome as qta
 
 class LoginForm(QWidget):
-    def __init__(self, session_factory, *args, **kwargs):
+    def __init__(self, session_factory: Callable[..., Session], *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.setWindowTitle("User Login")
         self.setFixedSize(400, 550)
@@ -209,10 +211,9 @@ class LoginForm(QWidget):
             )
 
             # if the login is successful get the role of the current user with username of that.
-            
-
             # OPEN THE MAIN DASHBAORD
             self.open_dashboard_main_window(
+                session_factory=self.Session,
                 username=username,
                 role=user.role.value,
                 open_win=True
@@ -225,13 +226,14 @@ class LoginForm(QWidget):
                 f"An error occured during login: {e}"
             )
     
-    def open_dashboard_main_window(self, username, role, open_win=False):
+    def open_dashboard_main_window(self, username, role, session_factory, open_win=False):
         if open_win:
             # close the login interface
             self.close()
             
             # OPEN THE DASHBOARD WINDOW
             self.dashboard_window = FGDashboard(
+                session_factory=session_factory,
                 username=username, 
                 role=role, 
                 login_widget=self

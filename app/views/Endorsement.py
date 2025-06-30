@@ -5,12 +5,23 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import QDate, Qt 
 from pydantic import BaseModel, Field, ValidationError, field_validator
+
 from datetime import date
+from typing import Union, overload, Callable
+from sqlalchemy.orm import Session
+
 from constants.Enums import StatusEnum, CategoryEnum
 from app.StyledMessage import StyledMessageBox
+from constants.mapped_user import mapped_user_to_display
+from app.helpers import fetch_current_t_refno_in_endorsement
 
+# models
+from models import User, EndorsementModel
+
+# custom widgets
+from app.widgets.lineedits import LotNumberLineEdit
 import os
-import qtawesome as qta
+import re
 
 
 # --- FORM SCHEMA IS CREATED HERE FOR SERIALIZATION AND VALIDATION ---
@@ -73,9 +84,9 @@ class EndorsementFormSchema(BaseModel):
     @field_validator("t_refno")
     @classmethod
     def validate_refno_format(cls, value):
-        if not value.startswith('REF-'):
-            raise ValueError('Reference number must start with "REF-"')
-
+        if not value.startswith("EF-"):
+            raise ValueError("Reference number must start with 'EF-'")
+        
         return value
     
     @field_validator("t_prodcode")
@@ -85,23 +96,69 @@ class EndorsementFormSchema(BaseModel):
         if not len(value) >= valid_length_for_prod:
             raise ValueError("Production code must be GTE 16")
         return value
-    
+
+    @field_validator("t_lotnumberwhole")
+    @classmethod
+    def validate_lot_number(cls, value):
+        # Acceptable patterns:
+        # Single lot: 4 digits followed by 2 uppercase letters, e.g. 1234AB
+        # Range lot: single lot - single lot, e.g. 1234AB - 5678CD
+
+        single_lot_pattern = r"^\d{4}[A-Z]{2}$"
+        range_lot_pattern = r"^\d{4}[A-Z]{2}-\d{4}[A-Z]{2}$"
+
+        if re.match(single_lot_pattern, value):
+            return value
+        elif re.match(range_lot_pattern, value):
+            # return value
+            pattern_int = int(value[:4])
+            pattern_int2 = int(value[7:11])
+
+            if pattern_int > pattern_int2:
+                raise ValueError("Starting lot must be less than ending lot no.")
+            
+            return value
+        else:
+            raise ValueError("format should be '1234AB' or '1234AB-1234CD'")
     ###################################################################
 
 # --- ENDORSEMENT VIEW LOGIC IS HERE ---
 class EndorsementView(QWidget):
-    def __init__(self, parent=None):
+    def __init__(self, session_factory: Callable[..., Session], parent=None):
         super().__init__(parent)
         self.setWindowTitle("Endorsement Form")
         self.setObjectName("EndorsementForm")
+        self.Session = session_factory
+        
         self.init_ui()
         self.apply_styles()
+    
+    @overload
+    def create_input_horizontal_layout(
+        self,
+        label_text: str,
+        widget: QWidget,
+        field_name: str,
+        error_label_name: str
+    ) -> None: 
+        ...
+    
+    @overload
+    def create_input_horizontal_layout(
+        self,
+        label_text: str,
+        widget: QLineEdit,
+        field_name: str,
+        error_label_name: str
+    ) -> None:
+        ...
 
     def init_ui(self):
         self.main_layout = QVBoxLayout()
-        self.main_layout.setAlignment(Qt.AlignmentFlag.AlignTop) # Align content to the top
+        self.main_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
-        self.form_fields = {} # Dictionary to store references to input widgets and error labels
+        # Dictionary to store references to input widgets and error labels
+        self.form_fields = {} 
 
         # Helper function to create a labeled input field
         def create_input_row(label_text, widget, field_name, error_label_name):
@@ -112,10 +169,15 @@ class EndorsementView(QWidget):
             h_layout.addWidget(label) 
             h_layout.addWidget(widget)
             
-            widget.setFixedWidth(250) # <-- consistent width here
+            widget.setFixedWidth(400) # <-- consistent width here
 
-            error_label = QLabel("")
-            error_label.setStyleSheet("color: red; font-size: 12px;") # error label font size
+            error_label = QLabel()
+            error_label.setStyleSheet("""
+                color: red;
+                font-size: 12px;
+                font-style: italic;
+            """)
+            
             error_label.setObjectName(f"{field_name}_error_label")
             h_layout.addWidget(error_label)
             
@@ -125,84 +187,31 @@ class EndorsementView(QWidget):
             self.main_layout.addLayout(h_layout)
         
         # 1. Reference Number
-        self.t_refno_input = QLineEdit()
-        # self.t_refno_input.setFixedWidth(250)
-        create_input_row("Reference Number:", self.t_refno_input, "t_refno", "t_refno_error")
+        self.create_t_refno_row(create_input_row)
 
         # 2. Date Endorsed
-        self.t_date_endorsed_input = QDateEdit(calendarPopup=True)
-        # self.t_date_endorsed_input.setFixedWidth(250)
-        self.t_date_endorsed_input.setDate(QDate.currentDate())
-        
-        create_input_row("Date Endorsed:", self.t_date_endorsed_input, "t_date_endorsed", "t_date_endorsed_error")
+        self.create_date_endorsed_row(create_input_row)
 
         # 3. Category
-        self.t_category_input = QComboBox()
-        for category in CategoryEnum:
-            self.t_category_input.addItem(category.value, category) # Store enum object as user data
-    
-        # create the input row
-        create_input_row("Category:", self.t_category_input, "t_category", "t_category_error")
+        self.create_category_row(create_input_row)
 
         # 4. Product Code
-        self.t_prodcode_input = QLineEdit()
-        # self.t_prodcode_input.setFixedWidth(250)
-        
-        create_input_row("Product Code:", self.t_prodcode_input, "t_prodcode", "t_prodcode_error")
+        self.create_prod_code_row(create_input_row)
 
         # 5. Whole Lot Number
-        # checkbox for the whole lot number
-
-        # TODO FIX THIS LOT NUMBER CODE TO WORK WITH THE QCHECKBOX! 
-        self.t_use_whole_lot_checkbox = QCheckBox("Use whole lot number")
-        self.t_lotnumberwhole_input = QLineEdit()
-
-        def toggle_lot_number_mask(state):
-            if state == Qt.CheckState.Checked:
-                # Whole lot: Example -> 1234AB - 5678CD
-                self.t_lotnumberwhole_input.setInputMask("0000AA - 0000AA;_")
-            else:
-                # Single lot: Example -> 1234AB
-                self.t_lotnumberwhole_input.setInputMask("0000AA;_")
-
-        self.t_use_whole_lot_checkbox.stateChanged.connect(toggle_lot_number_mask)
-
-        # default mask
-        self.t_lotnumberwhole_input.setInputMask("0000AA;_")
-
-        # create_input_row("Whole Lot Number:", self.t_lotnumberwhole_input, "t_lotnumberwhole", "t_lotnumberwhole_error")
-
-
-        # Add to layout
-        # create_input_row("Use Whole Lot:", self.t_use_whole_lot_checkbox, "t_use_whole_lot", "")
-        # create_input_row("Lot Number:", self.t_lotnumberwhole_input, "t_lotnumberwhole", "t_lotnumberwhole_error")
+        self.create_lot_number_row(create_input_row)
 
         # 6. Quantity (kg)
-        self.t_qtykg_input = QDoubleSpinBox()
-        self.t_qtykg_input.setMinimum(0.01) # Pydantic gt=0, so min here can be slightly above 0
-        self.t_qtykg_input.setMaximum(999999999.99)
-        self.t_qtykg_input.setDecimals(2)
-        create_input_row("Quantity (kg):", self.t_qtykg_input, "t_qtykg", "t_qtykg_error")
+        self.create_qtykg_row(create_input_row)
 
         # 7. Weight per Lot
-        self.t_wtlot_input = QDoubleSpinBox()
-        self.t_wtlot_input.setMinimum(0.01) # Pydantic gt=0, so min here can be slightly above 0
-        self.t_wtlot_input.setMaximum(999999999.99)
-        self.t_wtlot_input.setDecimals(2)
-        create_input_row("Weight per Lot:", self.t_wtlot_input, "t_wtlot", "t_wtlot_error")
+        self.create_weight_per_lot_row(create_input_row)
 
         # 8. Status
-        self.t_status_input = QComboBox()
-        
-        for status in StatusEnum:
-            self.t_status_input.addItem(status.value, status) # Store enum object as user data
-        
-        create_input_row("Status:", self.t_status_input, "t_status", "t_status_error")
-        self.t_status_input.setCurrentText(StatusEnum.PASSED.value) # Set default as per schema
+        self.create_status_row(create_input_row)
 
         # 9. Endorsed By
-        self.t_endorsed_by_input = QLineEdit()
-        create_input_row("Endorsed By:", self.t_endorsed_by_input, "t_endorsed_by", "t_endorsed_by_error")
+        self.create_endorsed_by_input_row(create_input_row)
 
         # Spacer to push elements to the top
         self.main_layout.addStretch(1)
@@ -215,19 +224,168 @@ class EndorsementView(QWidget):
 
         self.main_layout.setSpacing(12)
         self.setLayout(self.main_layout)
+    
+    def create_input_horizontal_layout(
+        self, 
+        label_text: str, 
+        widget: Union[QWidget, QLineEdit], 
+        field_name: str, 
+        error_label_name: str
+    ) -> None:
+        horizontal_layout = QHBoxLayout()
+        label = QLabel(label_text)
+        
+        label.setFixedWidth(200)
+        widget.setFixedWidth(250)
+
+        horizontal_layout.addWidget(label)
+        horizontal_layout.addWidget(widget)
+
+        error_label = QLabel()
+        error_label.setObjectName(f"{field_name}_error_label")
+        horizontal_layout.addWidget(error_label)
+
+        self.form_fields[field_name] = widget
+        self.form_fields[error_label_name] = error_label
+        
+        self.main_layout.addLayout(horizontal_layout)
+    
+    # for lot number row
+    def create_lot_number_row(self, create_input_row: Callable[[str, Union[QWidget, QLineEdit], str, str], None]):
+        self.t_use_whole_lot_checkbox = QCheckBox("Whole Lot")
+        self.t_use_whole_lot_checkbox.setObjectName("endorsement-toggle-lot")
+        # self.t_lotnumberwhole_input = QLineEdit()
+        self.t_lotnumberwhole_input = LotNumberLineEdit()
+        
+        def toggle_lot_number_mask(state):
+            checked_state = 2
+            unchecked_state = 0
+
+            self.t_lotnumberwhole_input.clear()
+
+            if state == checked_state:
+                self.t_lotnumberwhole_input.setInputMask("0000AA-0000AA; ")
+            elif state == unchecked_state:
+                self.t_lotnumberwhole_input.setInputMask("0000AA; ")
+            
+            self.t_lotnumberwhole_input.setFocus()
+            self.t_lotnumberwhole_input.setCursorPosition(0)
+
+        self.t_use_whole_lot_checkbox.stateChanged.connect(toggle_lot_number_mask)
+
+        # default
+        self.t_lotnumberwhole_input.setInputMask("0000AA; ")
+        self.t_lotnumberwhole_input.setPlaceholderText("e.g.1234AB or 1234AB-5678CD")
+
+        # add the layout to make them inline
+        lot_inline_layout = QHBoxLayout()
+        lot_inline_layout.setContentsMargins(0, 0, 0, 0)
+        lot_inline_layout.setSpacing(15)
+        lot_inline_layout.addWidget(self.t_lotnumberwhole_input)
+        lot_inline_layout.addWidget(self.t_use_whole_lot_checkbox)
+
+        # wrapping the whole lot number in one widget
+        lot_input_widget = QWidget()
+        lot_input_widget.setLayout(lot_inline_layout)
+
+        # return lot_input_widget
+        create_input_row("Whole Lot Number", lot_input_widget, "t_lotnumberwhole", "t_lotnumberwhole_error")
+    
+    def create_date_endorsed_row(self, create_input_row: Callable[[str, Union[QWidget, QLineEdit], str, str], None]):
+        self.t_date_endorsed_input = QDateEdit(calendarPopup=True)
+        self.t_date_endorsed_input.setDate(QDate.currentDate())
+
+        create_input_row("Date Endorsed:", self.t_date_endorsed_input, "t_date_endorsed", "t_date_endorsed_error")
+    
+    def create_t_refno_row(self, create_input_row: Callable[[str, Union[QWidget, QLineEdit], str, str], None]):
+        self.t_refno_input = QLineEdit()
+        self.t_refno_input.setObjectName("endorsement-refno-input")
+        self.t_refno_input.setDisabled(True)
+
+        try:
+            session = self.Session()
+            reference_num = fetch_current_t_refno_in_endorsement(session, EndorsementModel)
+            
+            self.t_refno_input.setText(reference_num)
+            
+            create_input_row("Reference Number:", self.t_refno_input, "t_refno", "t_refno_error")        
+        finally:
+            session.close()
+    
+    def create_category_row(self, create_input_row: Callable[[str, Union[QWidget, QLineEdit], str, str], None]):
+        self.t_category_input = QComboBox()
+        
+        for category in CategoryEnum:
+            self.t_category_input.addItem(category.value, category)
+        
+        create_input_row("Category:", self.t_category_input, "t_category", "t_category_error")
+    
+    def create_prod_code_row(self, create_input_row: Callable[[str, Union[QWidget, QLineEdit], str, str], None]):
+        self.t_prodcode_input = QComboBox()
+        self.t_prodcode_input.addItems([
+            "Placeholder12345",
+            "Placeholder12345",
+            "Placeholder12345"
+        ])
+
+        create_input_row("Product Code:", self.t_prodcode_input, "t_prodcode", "t_prodcode_error")
+    
+    def create_qtykg_row(self, create_input_row: Callable[[str, Union[QWidget, QLineEdit], str, str], None]):
+        self.t_qtykg_input = QDoubleSpinBox()
+        self.t_qtykg_input.setMinimum(0.01) # Pydantic gt=0, so min here can be slightly above 0
+        self.t_qtykg_input.setMaximum(999999999.99)
+        self.t_qtykg_input.setDecimals(2)
+        create_input_row("Quantity (kg):", self.t_qtykg_input, "t_qtykg", "t_qtykg_error")
+    
+    def create_weight_per_lot_row(self, create_input_row: Callable[[str, Union[QWidget, QLineEdit], str, str], None]):
+        self.t_wtlot_input = QDoubleSpinBox()
+        self.t_wtlot_input.setMinimum(0.01) # Pydantic gt=0, so min here can be slightly above 0
+        self.t_wtlot_input.setMaximum(999999999.99)
+        self.t_wtlot_input.setDecimals(2)
+        create_input_row("Weight per Lot:", self.t_wtlot_input, "t_wtlot", "t_wtlot_error")
+
+    def create_status_row(self, create_input_row: Callable[[str, Union[QWidget, QLineEdit], str, str], None]):
+        self.t_status_input = QComboBox()
+
+        for status in StatusEnum:
+            self.t_status_input.addItem(status.value, status)
+
+        self.t_status_input.setCurrentText(StatusEnum.PASSED.value)
+        create_input_row("Status:", self.t_status_input, "t_status", "t_status_error")
+
+    def create_endorsed_by_input_row(self, create_input_row: Callable[[str, Union[QWidget, QLineEdit], str, str], None]):
+        self.t_endorsed_by_input = QComboBox()
+        
+        # create the session here now
+        session = self.Session()
+
+        try:
+            # fetch all the user by username
+            users = session.query(User).all()
+
+            for user  in users:
+                displayed_user_text = mapped_user_to_display(user.username)
+
+                self.t_endorsed_by_input.addItem(displayed_user_text)
+
+            create_input_row("Endorsed By:", self.t_endorsed_by_input, "t_endorsed_by", "t_endorsed_by_error")
+
+        finally:
+            session.close()
 
     def get_form_data(self):
         """Collects data from UI widgets and returns it as a dictionary."""
+        
         return {
             "t_refno": self.t_refno_input.text(),
             "t_date_endorsed": self.t_date_endorsed_input.date().toPyDate(),
             "t_category": self.t_category_input.currentData(), # Retrieves the stored Enum object
-            "t_prodcode": self.t_prodcode_input.text(),
+            "t_prodcode": self.t_prodcode_input.currentText(),
             "t_lotnumberwhole": self.t_lotnumberwhole_input.text(),
             "t_qtykg": self.t_qtykg_input.value(),
             "t_wtlot": self.t_wtlot_input.value(),
             "t_status": self.t_status_input.currentData(), # Retrieves the stored Enum object
-            "t_endorsed_by": self.t_endorsed_by_input.text(),
+            "t_endorsed_by": self.t_endorsed_by_input.currentText(),
         }
 
     def clear_error_messages(self):
@@ -250,6 +408,7 @@ class EndorsementView(QWidget):
             message = error['msg']
             
             error_label_key = f"{field}_error"
+            
             if error_label_key in self.form_fields:
                 self.form_fields[error_label_key].setText(message)
                 
@@ -268,6 +427,9 @@ class EndorsementView(QWidget):
         form_data = self.get_form_data()
         
         try:
+            # start the session here
+            session = self.Session()
+
             # Validate the data using your Pydantic schema
             validated_data = EndorsementFormSchema(**form_data)
 
@@ -287,6 +449,10 @@ class EndorsementView(QWidget):
 
             # Optionally clear the form after successful submission
             self.clear_form()
+            
+            # ALSO FETCH THE REF_NO AGAIN. TO be displayed
+            reference_number = fetch_current_t_refno_in_endorsement(session, EndorsementModel)
+            self.t_refno_input.setText(reference_number)
 
         except ValidationError as e:
             # Handle validation errors
@@ -301,26 +467,57 @@ class EndorsementView(QWidget):
                 "Please correct the errors in the form"
             )
         except Exception as e:
-            # Catch any other unexpected errors during data collection or processing
             StyledMessageBox.critical(
                 self,
                 "Error",
                 f"An unexpected error occurred: {e}"
             )
-            print(f"An unexpected error occurred: {e}")
+        finally:
+            session.close()
 
+    # def clear_form(self):
+    #     """Resets the input fields to their initial state."""
+    #     self.t_refno_input.clear()
+    #     self.t_date_endorsed_input.setDate(QDate.currentDate())
+    #     self.t_category_input.setCurrentIndex(0) # Select first item
+    #     self.t_prodcode_input.clear()
+    #     self.t_lotnumberwhole_input.clear()
+    #     self.t_qtykg_input.setValue(0.01) # Or some default non-zero value
+    #     self.t_wtlot_input.setValue(0.01) # Or some default non-zero value
+    #     self.t_status_input.setCurrentText(StatusEnum.FAILED.value)
+    #     self.t_endorsed_by_input.clear()
+    #     self.clear_error_messages() # Ensure all error messages are cleared
+    
     def clear_form(self):
         """Resets the input fields to their initial state."""
+        # Clear reference number
         self.t_refno_input.clear()
+        
+        # Reset date to current date
         self.t_date_endorsed_input.setDate(QDate.currentDate())
-        self.t_category_input.setCurrentIndex(0) # Select first item
-        self.t_prodcode_input.clear()
-        self.t_lotnumberwhole_input.clear()
-        self.t_qtykg_input.setValue(0.01) # Or some default non-zero value
-        self.t_wtlot_input.setValue(0.01) # Or some default non-zero value
+        
+        # Reset category
+        self.t_category_input.setCurrentIndex(0)
+        
+        # Clear product code
+        self.t_prodcode_input.clearEditText()
+        
+        # Properly clear lot number field
+        self.t_lotnumberwhole_input.clear()  # This will use our overridden clear()
+        self.t_use_whole_lot_checkbox.setChecked(False)  # Reset checkbox
+        
+        # Reset quantity and weight
+        self.t_qtykg_input.setValue(0.01)
+        self.t_wtlot_input.setValue(0.01)
+        
+        # Reset status
         self.t_status_input.setCurrentText(StatusEnum.FAILED.value)
-        self.t_endorsed_by_input.clear()
-        self.clear_error_messages() # Ensure all error messages are cleared
+        
+        # Clear endorsed by
+        self.t_endorsed_by_input.clearEditText()
+        
+        # Clear error messages
+        self.clear_error_messages()
 
     def apply_styles(self):
         qss_style = os.path.join(os.path.dirname(__file__), "styles", "endorsement.css")
@@ -330,3 +527,10 @@ class EndorsementView(QWidget):
                 self.setStyleSheet(f.read())
         except FileNotFoundError:
             print("Warning: Style file not found. Default styles will be used.")
+
+# if __name__ == "__main__":
+#     app = QApplication(sys.argv)
+#     endorsement_win = EndorsementView()
+#     endorsement_win.show()
+
+#     sys.exit(app.exec())
