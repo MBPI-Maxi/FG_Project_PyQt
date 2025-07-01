@@ -11,9 +11,11 @@ from PyQt6.QtGui import QFont, QPixmap
 from PyQt6.QtCore import Qt, QSize
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
+from typing import Callable
 
 from app.dashboard.dashboard import FGDashboard
 from app.StyledMessage import StyledMessageBox
+
 # import models here
 from models import User, AuthLog
 
@@ -26,8 +28,6 @@ from app.helpers import button_cursor_pointer, record_auth_log
 # super password
 from constants.Enums import ITCredentials, AuthLogStatus
 
-from typing import Callable
-
 import sys
 import hashlib
 import socket
@@ -35,7 +35,27 @@ import os
 import qtawesome as qta
 
 class LoginForm(QWidget):
+    """
+    A PyQt6 widget for user login interface.
+
+    Provides username and password inputs, login button, and user registration option.
+    Uses SQLAlchemy session factory for database access and validates user credentials.
+    Displays dashboard on successful login and handles auth logging.
+
+    Args:
+        session_factory (Callable[..., Session]): Factory function to create SQLAlchemy sessions.
+        *args: Additional positional arguments for QWidget.
+        **kwargs: Additional keyword arguments for QWidget.
+    """
+
     def __init__(self, session_factory: Callable[..., Session], *args, **kwargs):
+        """
+        Initialize the login form UI and setup signals and styles.
+
+        Raises:
+            SQLAlchemyError: If the database connection cannot be established.
+        """
+
         super().__init__(*args, **kwargs)
         self.setWindowTitle("User Login")
         self.setFixedSize(400, 550)
@@ -93,23 +113,13 @@ class LoginForm(QWidget):
         self.main_layout.addStretch(1)
         self.main_layout.addWidget(self.create_user_button)
 
-        # sample line edit
-        # test_input = QLineEdit()
-        # test_input.setInputMask("0000 - 0000 - 0000;_")
-        # main_layout.addWidget(test_input)
-
         self.setLayout(self.main_layout)
         self.apply_styles()
         self.connect_signals()
 
         try:
-            # self.Session = sessionmaker(engine)
             self.Session = session_factory
             self.dashboard_window = None
-
-            # REGISTRATION INSTANCE
-            # self.registration_widget = Registration(session_factory=self.Session)
-
         except SQLAlchemyError as e:
             QMessageBox.critical(
                 None, "Database Error",
@@ -120,6 +130,12 @@ class LoginForm(QWidget):
             sys.exit(1)
     
     def apply_styles(self):
+        """
+        Apply styles and cursor changes to buttons and load stylesheet from file.
+
+        If the stylesheet file is missing, falls back to default styles and prints a warning.
+        """
+
         button_cursor_pointer(self.login_button)
         button_cursor_pointer(self.create_user_button)
         qss_path = os.path.join(os.path.dirname(__file__), "styles", "login.css")
@@ -131,22 +147,54 @@ class LoginForm(QWidget):
             print("Warning: Style file not found. Default styles will be used.")
 
     def connect_signals(self):
+        """
+        Connect UI signals to their respective slot methods.
+        
+        - Login button and pressing Enter triggers login.
+        - Create user button opens registration form.
+        """
+
         self.login_button.clicked.connect(self.handle_login)
         self.create_user_button.clicked.connect(self.open_registration_form)
         self.username_input.returnPressed.connect(self.handle_login)
         self.password_input.returnPressed.connect(self.handle_login)
     
     def hash_password(self, password):
+        """
+        Hash the given password using SHA-256.
+
+        Args:
+            password (str): Plain text password.
+
+        Returns:
+            str: Hexadecimal SHA-256 hash of the password.
+        """
+
         return hashlib.sha256(password.encode('utf-8')).hexdigest()
 
     def get_workstation_name(self):
+        """
+        Get the hostname of the current workstation.
+
+        Returns:
+            str: Hostname of the computer.
+        """
+
         return socket.gethostname()
 
     def handle_login(self):
+        """
+        Handle user login attempt.
+
+        Validates input, hashes password, queries database for matching user.
+        Shows message boxes for errors or success.
+        Records authentication logs for success or failure.
+        Opens dashboard window if login is successful.
+        """
+
         username = self.username_input.text().strip()
         password = self.password_input.text()
         
-
         if username is None or password is None:
             QMessageBox.warning(
                 self,
@@ -226,9 +274,25 @@ class LoginForm(QWidget):
                 f"An error occured during login: {e}"
             )
     
-    def open_dashboard_main_window(self, username, role, session_factory, open_win=False):
+    def open_dashboard_main_window(
+        self, 
+        username: str, 
+        role: str, 
+        session_factory: Callable[..., Session], 
+        open_win=False
+    ):
+        """
+        Open the main dashboard window and close the login form if specified.
+
+        Args:
+            username (str): Username of logged in user.
+            role (str): Role of logged in user.
+            session_factory (Callable[..., Session]): Factory for creating DB sessions.
+            open_win (bool): Whether to open the dashboard window. Defaults to False.
+        """
+        
         if open_win:
-            # close the login interface
+            # CLOSE THIS LOGIN INTERFACE
             self.close()
             
             # OPEN THE DASHBOARD WINDOW
@@ -241,6 +305,12 @@ class LoginForm(QWidget):
             self.dashboard_window.show()
     
     def open_registration_form(self):
+        """
+        Prompt for super password and open user registration form if authenticated.
+
+        Displays a warning message if the super password is incorrect.
+        """
+        
         super_password, ok = QInputDialog.getText(
             self,
             "Admin Authentication",

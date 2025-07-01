@@ -9,8 +9,11 @@ class LotNumberLineEdit(QLineEdit):
     
     def mousePressEvent(self, event: QMouseEvent):
         super().mousePressEvent(event)
-        self.setCursorPosition(0)
 
+        if not self.text():
+            self.setCursorPosition(0)
+        else:
+            self.setCursorPosition(len(self.text()))
     def clear(self):
         """Override clear to properly handle input mask"""
         self.setInputMask("")  # Remove mask temporarily
@@ -18,4 +21,5 @@ class LotNumberLineEdit(QLineEdit):
         # Restore default mask
         self.setInputMask("0000AA; ")
         self.setPlaceholderText("e.g.1234AB or 1234AB-5678CD")
+        
         self.setCursorPosition(0)

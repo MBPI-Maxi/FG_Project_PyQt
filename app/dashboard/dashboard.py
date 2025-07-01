@@ -21,7 +21,6 @@ from typing import Type, Callable
 from sqlalchemy.orm import Session
 from datetime import datetime
 
-
 import qtawesome as qta
 import os
 

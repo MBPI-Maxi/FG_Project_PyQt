@@ -8,7 +8,8 @@ from sqlalchemy import (
     String, 
     Float, 
     func,
-    ForeignKey
+    ForeignKey,
+    UniqueConstraint
 )
 from constants.Enums import CategoryEnum, StatusEnum
 from models import Base
@@ -44,10 +45,14 @@ class EndorsementModelT2(Base):
 
     t_id = Column(Integer(), primary_key=True, autoincrement=True)
     t_refno = Column(String, ForeignKey("tbl_endorsement_t1.t_refno"), nullable=False)
-    t_lotnumbersingle = Column(String(10), nullable=False)
+    t_lotnumbersingle = Column(String(10), nullable=False, unique=True)
     t_qty = Column(Float, nullable=False)
+    is_deleted = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now()) 
     updated_at = Column(DateTime(timezone=True), server_default=func.now())
 
     endorsement_parent = relationship("EndorsementModel", back_populates="endorsement_t2_items")
 
+    __table_args__ = (
+        UniqueConstraint("t_refno", "t_lotnumbersingle", name="uq_refno_lot"),
+    )

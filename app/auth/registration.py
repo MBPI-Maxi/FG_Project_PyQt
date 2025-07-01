@@ -4,25 +4,54 @@ from PyQt6.QtWidgets import (
     QLineEdit,
     QPushButton,
     QVBoxLayout,
-    QMessageBox,
     QComboBox,
 )
 from PyQt6.QtGui import QFont
 from PyQt6.QtCore import Qt
+from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import Session
+from typing import Callable
+
+from app.helpers import button_cursor_pointer, record_auth_log, add_new_user
+from app.StyledMessage import StyledMessageBox
 from models import User, AuthLog
 from constants.Enums import Department, UserRole, AuthLogStatus
-from sqlalchemy.exc import SQLAlchemyError
-from app.helpers import button_cursor_pointer, record_auth_log, add_new_user
 
 import hashlib
 import socket
 import os
 
 class Registration(QWidget):
-    def __init__(self, session_factory, parent=None):
+    """
+    A PyQt6 widget for user registration.
+
+    Provides UI for creating a new user account with fields for username, password,
+    password confirmation, role, and department selection.
+
+    The registration process:
+    - Validates input fields
+    - Ensures password confirmation matches
+    - Hashes the password with SHA-256
+    - Checks if username already exists in the database
+    - Creates a new user record using SQLAlchemy session
+    - Records an authentication log entry for registration
+    - Handles database errors and shows user feedback via message boxes
+
+    Args:
+        session_factory (Callable[..., Session]): Factory function to create SQLAlchemy sessions.
+        parent (QWidget, optional): Parent widget for this registration form. Defaults to None.
+    """
+
+    def __init__(
+        self, 
+        session_factory: Callable[..., Session], 
+        parent=None
+    ):
+        """
+        Initialize the registration form UI components, layout, and styles.
+        """
         super().__init__(parent)
-        self.session_factory = session_factory
-        # self.init_ui()
+        self.Session = session_factory
 
         self.setWindowTitle("User Registration")
         self.setFixedSize(400, 500)
@@ -81,6 +110,11 @@ class Registration(QWidget):
         self.apply_styles()
 
     def apply_styles(self):
+        """
+        Load and apply external CSS stylesheet for styling the registration widget.
+
+        Sets pointer cursor on register button. Falls back to default style if CSS file not found.
+        """
         qss_path = os.path.join(os.path.dirname(__file__), "styles", "registration.css")
         
         try:
@@ -92,12 +126,43 @@ class Registration(QWidget):
             print("Warning: Style file not found. Default styles will be used.")
         
     def hash_password(self, password):
+        """
+        Hash a plaintext password using SHA-256.
+
+        Args:
+            password (str): Plain text password.
+
+        Returns:
+            str: Hexadecimal SHA-256 hash of the input password.
+        """
+
         return hashlib.sha256(password.encode("utf-8")).hexdigest()
 
     def get_workstation_name(self):
+        """
+        Retrieve the hostname of the current workstation.
+
+        Returns:
+            str: Hostname of the computer running the app.
+        """
+
         return socket.gethostname()
 
     def handle_registration(self):
+        """
+        Validate inputs and handle the user registration process.
+
+        Steps:
+        - Check for empty username/password fields.
+        - Verify password and confirmation match.
+        - Hash password.
+        - Verify username uniqueness in database.
+        - Add new user to the database.
+        - Record successful registration event in auth log.
+        - Commit changes to database.
+        - Show success or error messages to the user.
+        """
+        
         username = self.username_input.text().strip()
         password = self.password_input.text()
         confirm_password = self.confirm_password_input.text()
@@ -105,14 +170,18 @@ class Registration(QWidget):
         department = self.department_input.currentText()
 
         if not username or not password:
-            QMessageBox.warning(
-                self, "Input Error", "Username and password cannot be empty."
+            StyledMessageBox.warning(
+                self,
+                "Input Error",
+                "Username and password cannot be empty."
             )
             return
 
         if password != confirm_password:
-            QMessageBox.warning(
-                self, "Input Error", "Please confirm the password if correct."
+            StyledMessageBox.warning(
+                self,
+                "Input Error",
+                "Please confirm the password if correct."
             )
             return
 
@@ -120,13 +189,14 @@ class Registration(QWidget):
         workstation_name = self.get_workstation_name()
 
         # initialize the session here that was imported in the Login widget
-        session = self.session_factory()
-
+        session = self.Session()
         try:
             # Check if user exists
             if session.query(User).filter_by(username=username).first():
-                QMessageBox.warning(
-                    self, "Registration Failed", "Username already exists."
+                StyledMessageBox.warning(
+                    self,
+                    "Registration Failed",
+                    "Username already exists."
                 )
                 return
  
@@ -155,20 +225,33 @@ class Registration(QWidget):
                 },
                 auth_log_model=AuthLog
             )
-
-            # commit everything if there is no failed transaction on both helper function 
-            session.commit()
-
-            QMessageBox.information(self, "Success", "User registered successfully.")
-            self.close()
-
         except SQLAlchemyError as e:
             session.rollback()
-            QMessageBox.critical(self, "Database Error", f"An error occurred: {e}")
+            StyledMessageBox.critical(
+                self,
+                "Database Error",
+                f"An error occurred: {e}"
+            )
             print(f"SQLAlchemyError: {e}")
         except TypeError as e:
             session.rollback()
-            QMessageBox.critical(self, "Program Error", f"An error occurred: {e}")
+            
+            StyledMessageBox.critical(
+                self,
+                "Program Error",
+                f"An error occurred: {e}"
+            )
+
             print(f"TypeError: {e}")
+        else:
+             # commit everything if there is no failed transaction on both helper function 
+            session.commit()
+
+            StyledMessageBox.information(
+                self,
+                "Success",
+                "User registered successfully."
+            )
+            self.close()
         finally:
             session.close()

@@ -5,8 +5,10 @@ mapped_data = {
 }
 
 def mapped_user_to_display(name: str) -> str:
+    reference_name = name
+    
     if not mapped_data.get(name):
         print(f"The username '{name}' is not yet added on the mapped_data")
     
-    return mapped_data.get(name, "Missing")
+    return mapped_data.get(name, reference_name)
     

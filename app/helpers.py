@@ -1,11 +1,13 @@
 # function for pointing hand cursor
 from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import QPushButton, QLineEdit
-from typing import Type, Dict, Any
+from PyQt6.QtWidgets import QPushButton
+from sqlalchemy import text
 from sqlalchemy.orm import Session, DeclarativeMeta
+from typing import Type, Dict, Any
 
 class ButtonCursorError(BaseException):
     pass
+
 
 # FOR CREATING CURSOR POINTER ON BUTTON
 def button_cursor_pointer(button_widget: Type[QPushButton]):
@@ -15,6 +17,7 @@ def button_cursor_pointer(button_widget: Type[QPushButton]):
         )
     else:
         raise ButtonCursorError("argument is not a QPushButton instance")
+
 
 # FOR LOGGING AUTH LOGS
 def record_auth_log(
@@ -31,6 +34,7 @@ def record_auth_log(
     if commit:
         session.commit()
 
+
 # FOR ADDING NEW USER
 def add_new_user(
     session: Type[Session],
@@ -45,16 +49,68 @@ def add_new_user(
 
     return new_user
 
-# FOR CREATING THE T_REF_NO
-def fetch_current_t_refno_in_endorsement(session: Type[Session], endorsement_model: Type[DeclarativeMeta]) -> str:
-    order_by_sequence = endorsement_model.t_id.desc()
-    endorsement_instance = session.query(endorsement_model).order_by(order_by_sequence).first()
-    
-    data_split = endorsement_instance.t_refno.split("-")
-    current_number = int(data_split[1])
 
-    if endorsement_instance is None:
-        return "EF-1"
-    
-    return f"EF-{current_number + 1}"
+# FOR CREATING THE T_REF_NO on the views
+def fetch_current_t_refno_in_endorsement(session: Session, endorsement_model: Type[DeclarativeMeta]) -> str:
+    table_name = endorsement_model.__tablename__
+    column_name = "t_id" # because the id and reference number will only follow the current id
+
+    # Get the sequence name
+    result = session.execute(
+        text("SELECT pg_get_serial_sequence(:table, :column) AS seq_name"),
+        {"table": table_name, "column": column_name}
+    )
+    seq_name = result.scalar()
+
+    # Get current value of the sequence (non-incrementing)
+    result = session.execute(text(f"SELECT last_value FROM {seq_name}"))
+    current_value = result.scalar()
+
+    # Optional: You can also +1 if you want the next expected ID
+    return f"EF-{current_value + 1}"
+
+
+
+def calculate_qty_on_endorsement_table_2():
+    pass
+
+
+
+# FOR CREATING THE ENDORSEMENT TABLE 2 
+def generate_endorsement_table_2(
+    endorsement_model: Type[DeclarativeMeta],
+    endorsement_model_t2: Type[DeclarativeMeta],
+    validated_data 
+):
+    t2_items = []
+    validated_lot_number = validated_data.t_lotnumberwhole
+
+    if "-" in validated_lot_number:
+        start_lot = validated_lot_number[:6]
+        end_lot = validated_lot_number[-6:]
+        
+        start_number = int(start_lot[:4])
+        end_number = int(end_lot[:4])
+
+        for number in range(start_number, end_number + 1):
+            lot_code = f"{number:04d}{start_lot[4:]}"
+            t2_items.append(
+                endorsement_model_t2(
+                    t_refno=validated_data.t_refno,
+                    t_lotnumbersingle=lot_code,
+                    t_qty=validated_data.t_qtykg # calculate the value here to be inputted
+                )
+            )
+    else:
+        # single lot entry
+        t2_items.append(
+            endorsement_model_t2(
+                t_refno=validated_data.t_refno,
+                t_lotnumbersingle=validated_data.t_lotnumberwhole,
+                t_qty=validated_data.t_qtykg # if single quantity input it as is.
+            )
+        )
+
+    # attaching to the main model here
+    endorsement_model.endorsement_t2_items = t2_items
     

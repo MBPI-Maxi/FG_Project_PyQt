@@ -75,4 +75,19 @@ QComboBox QAbstractItemView {
 
 QCheckBox#endorsement-toggle-lot {
     color: black;
+    font-size: 14px;
+    font-weight: 700;
+}
+
+QCheckBox#endorsement-toggle-lot::indicator {
+    width: 18px;
+    height: 18px;
+    background-color: rgb(233, 230, 230);
+    border: 1px solid #aaa;
+    border-radius: 3px;
+}
+
+QCheckBox#endorsement-toggle-lot::indicator:checked {
+    background-color: #3a9eea;
+    border: 1px solid #3a9eea;
 }
