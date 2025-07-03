@@ -1,0 +1,53 @@
+QLabel {
+    font-size: 18px;
+    color: black;
+    padding: 0px;
+    margin: 0px;
+}
+
+QDateEdit, QComboBox {
+    font-size: 14px;
+}
+
+QDateEdit {
+    width: 120px;
+}
+
+QLabel {
+    color: black;
+}
+
+QPushButton#endorsementList-search-btn {
+    background-color: #3a9eea;
+    color: white;            
+    border: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+    width: 100px;
+}
+
+QPushButton#endorsementList-search-btn:hover {
+    background-color: #317dc4;  
+    color: white; 
+}
+
+QComboBox,
+QDateEdit,
+QLineEdit {
+    background-color: white;
+    color: black;
+    padding: 6px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    font-size: 14px;
+}
+
+QComboBox QAbstractItemView {
+    background-color: white;
+    color: black;
+    selection-background-color: #e6f2ff; 
+    border: 1px solid #ccc;
+    font-size: 14px;
+}
+
+

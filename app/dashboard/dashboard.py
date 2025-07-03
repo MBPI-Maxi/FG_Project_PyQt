@@ -4,6 +4,7 @@ from PyQt6.QtWidgets import (
 )
 from app.views import (
     EndorsementView,
+    EndorsementMainView,
     QCFailedToPassed,
     QCLabExcess,
     ReceivingReport,
@@ -79,7 +80,8 @@ class FGDashboard(QMainWindow):
 
         # INITIALIZED STACK (index by order)
         # INCOMING
-        self.add_stack_page("Endorsement", "Endorsement", EndorsementView(session_factory=self.Session))
+        # self.add_stack_page("Endorsement", "Endorsement", EndorsementView(session_factory=self.Session))
+        self.add_stack_page("Endorsement", "Endorsement", EndorsementMainView(session_factory=self.Session))
         self.add_stack_page("QC Failed to Passed", "QC Failed to Passed", QCFailedToPassed())
         self.add_stack_page("QC Lab Excess", "QC Lab Excess", QCLabExcess())
         self.add_stack_page("Receiving Report", "Receiving Report", ReceivingReport())
@@ -210,7 +212,7 @@ class FGDashboard(QMainWindow):
         btn_delivery_receipt.setIcon(qta.icon("fa5s.truck", color="#ecf0f1"))
         btn_delivery_receipt.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(4))  # Index 5
 
-        btn_rrf = QPushButton("  Return Replacement (RRF)")
+        btn_rrf = QPushButton("  Return Replacement")
         btn_rrf.setIcon(qta.icon("fa5s.exchange-alt", color="#ecf0f1"))
         btn_rrf.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(5))  # Index 5
 

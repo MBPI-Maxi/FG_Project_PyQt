@@ -18,7 +18,6 @@ def button_cursor_pointer(button_widget: Type[QPushButton]):
     else:
         raise ButtonCursorError("argument is not a QPushButton instance")
 
-
 # FOR LOGGING AUTH LOGS
 def record_auth_log(
     session: Type[Session],
