@@ -6,7 +6,15 @@ class LotNumberLineEdit(QLineEdit):
     def __init__(self, parent=None):
         super().__init__(parent)
         # Removed the NoSpaceValidator since input mask handles formatting
+        self.setMaxLength(11)
     
+    def keyPressEvent(self, event):
+        if event.text().isalpha():
+            upper_char = event.text().upper()
+            self.insert(upper_char)
+        else:
+            super().keyPressEvent(event)
+
     def mousePressEvent(self, event: QMouseEvent):
         super().mousePressEvent(event)
 

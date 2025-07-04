@@ -154,7 +154,6 @@ class EndorsementFormSchema(BaseModel):
                     raise ValueError("Letter code must increment after 9999 lot reset.")
 
             return value
-
         else:
             raise ValueError("Lot number format must be '1234AB' or '1234AB-1235AB'")
     ###################################################################
@@ -248,6 +247,9 @@ class EndorsementView(QWidget):
         # Helper function to create a labeled input field
         def create_input_row(label_text, widget, field_name, error_label_name):
             h_layout = QHBoxLayout()
+            h_layout.setContentsMargins(0, 0, 0, 0)
+            h_layout.setSpacing(0)
+
             label = QLabel(label_text)
             label.setFixedWidth(200) # Or whatever consistent width
             
@@ -261,6 +263,7 @@ class EndorsementView(QWidget):
                 color: red;
                 font-size: 12px;
                 font-style: italic;
+                margin-left: 5px;
             """)
             
             error_label.setObjectName(f"{field_name}_error_label")
@@ -273,6 +276,7 @@ class EndorsementView(QWidget):
         
         # 1. Reference Number
         self.create_t_refno_row(create_input_row)
+    
         # 2. Date Endorsed
         self.create_date_endorsed_row(create_input_row)
         # 3. Category
@@ -293,12 +297,11 @@ class EndorsementView(QWidget):
         self.main_layout.addStretch(1)
 
         # Save Button
-        h_save_btn_layout = QHBoxLayout()
         self.save_button = QPushButton("Save Endorsement")
         self.save_button.setObjectName("endorsement-save-btn")
         self.save_button.clicked.connect(self.save_endorsement)
-        # self.main_layout.addWidget(self.save_button)
         
+        self.main_layout.addWidget(self.save_button)
 
         # form table
         splitter = QSplitter(Qt.Orientation.Vertical)
@@ -337,7 +340,6 @@ class EndorsementView(QWidget):
         except Exception as e:
             print(f"Error refreshing table: {e}")
         
-    
     def create_input_horizontal_layout(
         self, 
         label_text: str, 
@@ -346,6 +348,7 @@ class EndorsementView(QWidget):
         error_label_name: str
     ) -> None:
         horizontal_layout = QHBoxLayout()
+        
         label = QLabel(label_text)
         
         label.setFixedWidth(200)
@@ -414,6 +417,7 @@ class EndorsementView(QWidget):
     ):
         self.t_date_endorsed_input = QDateEdit(calendarPopup=True)
         self.t_date_endorsed_input.setDate(QDate.currentDate())
+        self.t_date_endorsed_input.setObjectName("endorsement-date-endorsed-input")
 
         create_input_row("Date Endorsed:", self.t_date_endorsed_input, "t_date_endorsed", "t_date_endorsed_error")
     
@@ -425,13 +429,24 @@ class EndorsementView(QWidget):
         self.t_refno_input.setObjectName("endorsement-refno-input")
         self.t_refno_input.setDisabled(True)
 
+        # Excess checkbox
+        self.has_excess_checkbox = QCheckBox("Has excess")
+        self.has_excess_checkbox.setObjectName("endorsement-has-excess-checkbox")
+
+        refno_container = QWidget()
+        refno_layout = QVBoxLayout(refno_container)
+        refno_layout.setContentsMargins(0, 0, 0, 0)
+        refno_layout.setSpacing(5)
+
+        refno_layout.addWidget(self.has_excess_checkbox)
+        refno_layout.addWidget(self.t_refno_input)
+
         try:
             session = self.Session()
             reference_num = fetch_current_t_refno_in_endorsement(session, EndorsementModel)
             
             self.t_refno_input.setText(reference_num)
-            
-            create_input_row("Reference Number:", self.t_refno_input, "t_refno", "t_refno_error")        
+            create_input_row("Reference Number:", refno_container, "t_refno", "t_refno_error")   
         finally:
             session.close()
     
@@ -464,11 +479,13 @@ class EndorsementView(QWidget):
         create_input_row: Callable[[str, Union[QWidget, QLineEdit], str, str], None]
     ):
         self.t_qtykg_input = QDoubleSpinBox()
+        self.t_qtykg_input.setObjectName("endorsement-t-qtykg-input-spinbox")
         self.t_qtykg_input.setMinimum(0.01) # Pydantic gt=0, so min here can be slightly above 0
         self.t_qtykg_input.setMaximum(999999999.99)
         self.t_qtykg_input.setDecimals(2)
+
         create_input_row("Quantity (kg):", self.t_qtykg_input, "t_qtykg", "t_qtykg_error")
-    
+            
     def create_weight_per_lot_row(
         self, 
         create_input_row: Callable[[str, Union[QWidget, QLineEdit], str, str], None]
@@ -477,6 +494,7 @@ class EndorsementView(QWidget):
         self.t_wtlot_input.setMinimum(0.01) # Pydantic gt=0, so min here can be slightly above 0
         self.t_wtlot_input.setMaximum(999999999.99)
         self.t_wtlot_input.setDecimals(2)
+
         create_input_row("Weight per Lot:", self.t_wtlot_input, "t_wtlot", "t_wtlot_error")
 
     def create_status_row(
@@ -510,7 +528,6 @@ class EndorsementView(QWidget):
                 self.t_endorsed_by_input.addItem(displayed_user_text)
 
             create_input_row("Endorsed By:", self.t_endorsed_by_input, "t_endorsed_by", "t_endorsed_by_error")
-
         finally:
             session.close()
 

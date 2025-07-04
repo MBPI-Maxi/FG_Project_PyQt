@@ -2,12 +2,6 @@
     color: black;
 }
 
-QLabel {
-    font-weight: 600;
-    font-size: 14px;
-    color: #333;
-}
-
 /* save button */
 #endorsement-save-btn {
     background-color: #3a9eea;
@@ -31,6 +25,12 @@ QLabel {
     font-style: italic;
 }
 
+QLabel {
+    font-weight: 600;
+    font-size: 14px;
+    color: #333;
+}
+
 /* endorsement form */
 QWidget#EndorsementForm {
     background-color: #f5f7fa;
@@ -51,11 +51,11 @@ QComboBox {
 
 QLineEdit:focus, 
 QDateEdit:focus, 
-QComboBox:focus,
-QDoubleSpinBox:focus {
+QComboBox:focus
+{
     border: 2px solid #3a9eea;  /* Same blue as your button */
     background-color: white;
-    selection-background-color: #3a9eea;
+    selection-background-color: #3a9eea; 
     selection-color: white;
 }
 
@@ -73,21 +73,37 @@ QComboBox QAbstractItemView {
     font-size: 14px;
 }
 
-QCheckBox#endorsement-toggle-lot {
+QDoubleSpinBox {
+    background-color: white;
     color: black;
+    padding: 6px;
     font-size: 14px;
-    font-weight: 700;
 }
 
-QCheckBox#endorsement-toggle-lot::indicator {
-    width: 18px;
-    height: 18px;
-    background-color: rgb(233, 230, 230);
-    border: 1px solid #aaa;
-    border-radius: 3px;
-}
 
-QCheckBox#endorsement-toggle-lot::indicator:checked {
+/* this is for the calendar widget */
+QDateEdit#endorsement-date-endorsed-input QCalendarWidget QToolButton {
+    color: white;
+    font-weight: bold;
     background-color: #3a9eea;
-    border: 1px solid #3a9eea;
+    padding: 4px;
+}
+
+QDateEdit#endorsement-date-endorsed-input QWidget {
+    alternate-background-color: #B8E2FF;
+}
+
+QDateEdit#endorsement-date-endorsed-input QCalendarWidget #qt_calendar_navigationbar {
+    background-color: #3a9eea;
+}
+
+QDateEdit#endorsement-date-endorsed-input QHeaderView::section {
+    background-color: white;
+}
+
+QDateEdit#endorsement-date-endorsed-input QCalendarWidget QAbstractItemView:enabled {
+    color: black;
+    background-color: white;
+    selection-background-color: #3a9eea;
+    selection-color: white;
 }

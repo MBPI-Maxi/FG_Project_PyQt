@@ -20,6 +20,8 @@ QHeaderView::section {
     border: 1px solid #d0d0d0;
     font-weight: bold;
     font-size: 20px;
+    font-family: "Arial", "Segoe UI", "Roboto", sans-serif;
+    letter-spacing: 0.5px;
 }
 
 QTableWidget::item:selected {
