@@ -38,13 +38,16 @@ QHeaderView::section {
 
 QScrollBar:vertical {
     border: none;
-    background: #f0f0f0;
+    /* background: #f0f0f0; */
+    background: grey;
+    background: transparent;
     width: 10px;
     margin: 0px 0px 0px 0px;
 }
 
 QScrollBar::handle:vertical {
-    background: #c0c0c0;
+    /* background: #c0c0c0; */
+    background: transparent;
     min-height: 20px;
     border-radius: 4px;
 }
@@ -60,10 +63,50 @@ QPushButton#endorsement-export-btn {
     border: none;
     padding: 8px 16px;
     border-radius: 4px;
-    width: 120px;                                     
+    width: 120px;                                   
 }
 
 QPushButton#endorsement-export-btn:hover {
     background-color: #317dc4;
     color: white;
+}
+
+/* NEXT AND PREVIOUS QPUSHBUTTON DESIGN */
+QPushButton#tablewidget-prev-btn,
+QPushButton#tablewidget-next-btn {
+    background-color: #5bc0de;
+    color: white;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 4px;
+}
+
+QPushButton#tablewidget-prev-btn:hover
+QPushButton#tablewidget-next-btn:hover {
+    background-color: #31b0d5;
+}
+
+QPushButton#tablewidget-prev-btn:disabled,
+QPushButton#tablewidget-next-btn:disabled {
+    background-color: #cccccc;
+    color: #666666;
+}
+
+/* COMBO BOX FOR THE PAGES I.E HOW MANY PAGES TO VIEW */
+QComboBox#table-widget-items-per-page-combo {
+    /* border: 1px solid #cccccc; */
+    border-radius: 3px;
+    padding: 1px 18px 1px 3px;
+    min-width: 6em;
+}
+
+QComboBox#table-widget-items-per-page-combo::drop-down {
+    subcontrol-origin: padding;
+    subcontrol-position: top right;
+    width: 15px;
+    border-left-width: 1px;
+    /* border-left-color: darkgray; */
+    border-left-style: solid;
+    border-top-right-radius: 3px;
+    border-bottom-right-radius: 3px;
 }

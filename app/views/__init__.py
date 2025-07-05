@@ -1,5 +1,5 @@
 # incoming
-from app.views.Endorsement import EndorsementView, EndorsementMainView
+from app.views.Endorsement import EndorsementMainView
 from app.views.QCFailedToPassed import QCFailedToPassed
 from app.views.QCLabExcess import QCLabExcess
 from app.views.ReceivingReport import ReceivingReport

@@ -1,165 +1,40 @@
 from PyQt6.QtWidgets import (
     QWidget, QLabel, QVBoxLayout, QHBoxLayout,
     QLineEdit, QDateEdit, QComboBox, QDoubleSpinBox, QPushButton,
-    QCheckBox, QScrollArea, QTableWidget, QTableWidgetItem, QSplitter, QHeaderView, QSizePolicy,
-    QStackedWidget, QMenu, QFileDialog
+    QCheckBox, QSplitter, QSizePolicy,
+    QStackedWidget
 )
+
 from app.helpers import (
     fetch_current_t_refno_in_endorsement,
     generate_endorsement_table_2,
     button_cursor_pointer
 ) 
 
-from PyQt6.QtCore import QDate, Qt, pyqtSignal
-from pydantic import BaseModel, Field, ValidationError, field_validator
+from PyQt6.QtCore import QDate, Qt
+from pydantic import ValidationError
 
-from datetime import date
-from typing import Union, overload, Callable, List
+from typing import Union, overload, Callable, Type
 from sqlalchemy.orm import Session
 
-from constants.Enums import StatusEnum, CategoryEnum
 from app.StyledMessage import StyledMessageBox
+from constants.Enums import StatusEnum, CategoryEnum, RemarksEnum
 from constants.mapped_user import mapped_user_to_display
 
-# models
+# MODELS
 from models import User, EndorsementModel, EndorsementModelT2
 
-# custom widgets
+# ENDORSEMENT SCHEMA
+from app.views.validatorSchema import EndorsementFormSchema
+
+# CUSTOM WIDGET
 from app.widgets.lineedits import LotNumberLineEdit
+from app.widgets.tablewidget import TableWidget
+
 import os
-import re
-import pandas as pd
-
-
-# --- FORM SCHEMA IS CREATED HERE FOR SERIALIZATION AND VALIDATION ---
-class EndorsementFormSchema(BaseModel):
-    """
-    Schema for validating Endorsement Form input using Pydantic.
-
-    Fields map directly to SQLAlchemy model attributes and ensure
-    consistent input structure and data integrity before database operations.
-    """
-    
-    # Map directly to your SQLAlchemy model fields (should match the data)
-    t_refno: str = Field(
-        ...,  # meaning required field to be fill up
-        min_length=1, 
-        max_length=255, 
-        description="Reference Number"
-    )
-    t_date_endorsed: date = Field(
-        ..., 
-        description="Date Endorsed"
-    )
-    t_category: CategoryEnum = Field(
-        default=CategoryEnum.MB, 
-        description="Category of Endorsement"
-    )
-    t_prodcode: str = Field(
-        ..., 
-        min_length=1, 
-        max_length=255, 
-        description="Product Code"
-    )
-    t_lotnumberwhole: str = Field(
-        ..., 
-        min_length=1, 
-        max_length=255, 
-        description="Whole Lot Number"
-    )
-    t_qtykg: float = Field(
-        ..., 
-        gt=0, 
-        description="Quantity in Kilograms"
-    ) # gt=0 ensures it's greater than 0
-    t_wtlot: float = Field(
-        ..., 
-        gt=0, 
-        description="Weight per Lot"
-    ) # gt=0 ensures it's greater than 0
-    t_status: StatusEnum = Field(
-        default=StatusEnum.PASSED, 
-        description="Status of Endorsement"
-    )
-    t_endorsed_by: str = Field(
-        ..., 
-        min_length=1, 
-        max_length=255, 
-        description="Endorsed By"
-    )
-
-    class Config:
-        # Ensures that Pydantic works correctly with Enum values
-        use_enum_values = True 
-
-    ### VALIDATORS ###
-    #####################################################################
-
-    @field_validator("t_refno")
-    @classmethod
-    def validate_refno_format(cls, value):
-        if not value.startswith("EF-"):
-            raise ValueError("Reference number must start with 'EF-'")
-        
-        return value
-    
-    @field_validator("t_prodcode")
-    @classmethod
-    def validate_prodcode_format(cls, value):
-        valid_length_for_prod = 16
-        if not len(value) >= valid_length_for_prod:
-            raise ValueError("Production code must be GTE 16")
-        return value
-    
-    @field_validator("t_lotnumberwhole")
-    @classmethod
-    def validate_lot_number(cls, value):
-        alphabet_list = list("abcdefghijklmnopqrstuvwxyz")
-
-        single_lot_pattern = r"^\d{4}[A-Z]{2}$"
-        range_lot_pattern = r"^\d{4}[A-Z]{2}-\d{4}[A-Z]{2}$"
-
-        if re.match(single_lot_pattern, value):
-            return value
-
-        elif re.match(range_lot_pattern, value):
-            start, end = value.split("-")
-            first_num, first_code = start[:4], start[-2:]
-            second_num, second_code = end[:4], end[-2:]
-
-            first_int = int(first_num)
-            second_int = int(second_num)
-
-            fl1 = alphabet_list.index(first_code[0].lower())
-            fl2 = alphabet_list.index(first_code[1].lower())
-            sl1 = alphabet_list.index(second_code[0].lower())
-            sl2 = alphabet_list.index(second_code[1].lower())
-
-            first_code_index = fl1 * 26 + fl2
-            second_code_index = sl1 * 26 + sl2
-
-            # Validate number order
-            if first_int > second_int and not (first_int == 9999 and second_int == 1):
-                raise ValueError("Starting lot must be less than or equal to ending lot.")
-
-            # Validate letter code order always
-            if second_code_index < first_code_index:
-                raise ValueError("Ending letter code is invalid. Please check carefully.")
-
-            # Special case: rollover
-            if first_int == 9999:
-                if second_int != 1:
-                    raise ValueError("After 9999, lot number must reset to 0001.")
-                if second_code_index <= first_code_index:
-                    raise ValueError("Letter code must increment after 9999 lot reset.")
-
-            return value
-        else:
-            raise ValueError("Lot number format must be '1234AB' or '1234AB-1235AB'")
-    ###################################################################
 
 # --- ENDORSEMENT VIEW LOGIC IS HERE ---
-class EndorsementView(QWidget):
+class EndorsementCreateView(QWidget):
     """
     A form widget for creating and submitting product endorsements.
 
@@ -206,12 +81,14 @@ class EndorsementView(QWidget):
         super().__init__(parent)
         self.setWindowTitle("Endorsement Form")
         self.setObjectName("EndorsementForm")
+        
         self.Session = session_factory
         # created a table widget (now seperate component)
-        self.table_widget = EndorsementTableWidget(
+        self.table_widget = TableWidget(
             session_factory=session_factory, 
-            parent=self,
-            view_type="endorsement-create"
+            db_model=EndorsementModel, 
+            view_type="endorsement-create", 
+            parent=self
         )
         
         self.init_ui()
@@ -245,7 +122,12 @@ class EndorsementView(QWidget):
         self.form_fields = {} 
 
         # Helper function to create a labeled input field
-        def create_input_row(label_text, widget, field_name, error_label_name):
+        def create_input_row(
+            label_text: str, 
+            widget: Type[QWidget], 
+            field_name: str, 
+            error_label_name: str
+        ):
             h_layout = QHBoxLayout()
             h_layout.setContentsMargins(0, 0, 0, 0)
             h_layout.setSpacing(0)
@@ -293,6 +175,9 @@ class EndorsementView(QWidget):
         self.create_status_row(create_input_row)
         # 9. Endorsed By
         self.create_endorsed_by_input_row(create_input_row)
+        # 8. Remarks
+        self.create_remarks_input_row(create_input_row)
+
         # Spacer to push elements to the top
         self.main_layout.addStretch(1)
 
@@ -310,6 +195,8 @@ class EndorsementView(QWidget):
         splitter.addWidget(form_container)
         splitter.addWidget(self.table_widget)
 
+        # configuring the splitter behavior:
+        splitter.setStretchFactor(0, 1)
 
         self.main_layout.setSpacing(12)
         container_layout = QVBoxLayout(self)
@@ -530,6 +417,17 @@ class EndorsementView(QWidget):
             create_input_row("Endorsed By:", self.t_endorsed_by_input, "t_endorsed_by", "t_endorsed_by_error")
         finally:
             session.close()
+    
+    def create_remarks_input_row(
+        self,
+        create_input_row: Callable[[str, Union[QWidget, QLineEdit], str, str], None]
+    ):
+        self.t_remarks_by_input = QComboBox()
+        
+        for remark in RemarksEnum:
+            self.t_remarks_by_input.addItem(remark.value, remark)
+
+        create_input_row("Remarks:", self.t_remarks_by_input, "t_remarks", "t_remarks_error")
 
     def get_form_data(self):
         """Collects data from UI widgets and returns it as a dictionary."""
@@ -590,14 +488,7 @@ class EndorsementView(QWidget):
 
             # Validate the data using your Pydantic schema
             validated_data = EndorsementFormSchema(**form_data)
-
-            # If validation passes:
-            # At this point, you would typically pass `validated_data.dict()`
-            # to your SQLAlchemy model for database insertion/update.
-            # For this example, we'll just print it.
-            # print("Form data is valid!")
-            # print(validated_data.model_dump_json(indent=2)) # Use model_dump_json for Pydantic v2+
-
+            # print(validated_data.model_dump_json(indent=2)) 
             # if the form is valid store this in the database.
             endorsement = EndorsementModel(**validated_data.model_dump())
                 
@@ -615,7 +506,6 @@ class EndorsementView(QWidget):
             
             self.display_errors(e.errors())
             
-            # QMessageBox.warning(self, "Validation Error", "Please correct the errors in the form.")
             StyledMessageBox.warning(
                 self,
                 "Validation Error",
@@ -631,7 +521,6 @@ class EndorsementView(QWidget):
             # commit the changes if all transaction in the try block is valid
             session.commit()
 
-            # QMessageBox.information(self, "Success", "Endorsement form submitted successfully!")
             StyledMessageBox.information(
                 self,
                 "Success",
@@ -689,259 +578,6 @@ class EndorsementView(QWidget):
         except FileNotFoundError:
             print("Warning: Style file not found. Default styles will be used.")
 
-class EndorsementTableWidget(QWidget):
-    """Reusable table widget for displaying endorsement records across multiple views."""
-    # Custom signal
-    double_clicked = pyqtSignal(str)
-
-    def __init__(
-        self, 
-        session_factory: Callable[..., Session],
-        view_type: Union[str, None]=None,
-        parent=None
-    ):
-        super().__init__(parent)
-        valid_views = [
-            "endorsement-list",
-            "endorsement-create"
-        ]
-
-        if view_type in valid_views:
-            self.view_type = view_type
-        else:
-            self.view_type = None
-
-        self.Session = session_factory
-        self.setup_ui()
-        self.load_data()
-        self.apply_table_styles()
-
-    def apply_table_styles(self):
-        """Apply styling to the table widget."""
-        qss_path = os.path.join(os.path.dirname(__file__), "styles", "table.css")
-        button_cursor_pointer(self.export_btn)
-        
-        self.table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOn)
-        
-
-        try:
-            with open(qss_path, "r") as f:
-                self.table.setStyleSheet(f.read())
-        except FileNotFoundError:
-            print("Warning: Style file not found. Default styles will be used.")
-
-        # Additional Qt properties for better appearance
-        self.table.setAlternatingRowColors(True)
-        self.table.setShowGrid(False)
-        self.table.verticalHeader().setVisible(False)
-        self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
-        self.table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
-        self.table.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        
-        # Stretch last column to fill space
-        self.table.horizontalHeader().setStretchLastSection(True)
-        
-        # Set column widths (adjust as needed)
-        self.table.setColumnWidth(0, 100)  # Ref No
-        self.table.setColumnWidth(1, 100)  # Date
-        self.table.setColumnWidth(2, 100)  # Category
-        self.table.setColumnWidth(3, 150)  # Product Code
-        self.table.setColumnWidth(4, 150)  # Lot Number
-        self.table.setColumnWidth(5, 80)   # Qty (kg)
-        self.table.setColumnWidth(6, 80)   # Status
-
-        self.export_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #3a9eea;
-                color: white;
-                border: none;
-                padding: 8px 16px;
-                border-radius: 4px;
-                width: 120px;                        
-            }
-
-            QPushButton:hover {
-                background-color: #317dc4;
-                color: white;
-            }                         
-        """)
-        
-    def setup_ui(self):
-        """Initialize UI components."""
-        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        self.layout = QVBoxLayout(self)
-        self.layout.setContentsMargins(0, 0, 0, 0)
-        self.layout.setSpacing(0)
-        
-        # Create table
-        self.table = QTableWidget()
-        self.table.setObjectName("endorsementTable")
-        self.table.setSizePolicy(
-            QSizePolicy.Policy.Expanding, 
-            QSizePolicy.Policy.Expanding
-        )
-        self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
-        self.table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
-        self.table.setMinimumHeight(300)
-        
-        # this is for having a right click button the rows
-        self.table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
-        self.table.customContextMenuRequested.connect(self.show_context_menu)
-
-        # Configure headers
-        self.table.setColumnCount(8)
-        self.table.setHorizontalHeaderLabels([
-            "Ref No", "Date Endorse", "Category", 
-            "Product Code", "Lot Number", 
-            "Qty (kg)", "Status", "Endorsed By"
-        ])
-        self.table.horizontalHeader().setStretchLastSection(True)
-        
-        # Create a container widget for proper resizing
-        container = QWidget()
-        container.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        container.setLayout(QVBoxLayout())
-        container.layout().setContentsMargins(0, 0, 0, 0)
-        container.layout().addWidget(self.table)
-
-        # Add scroll area
-        scroll_area = QScrollArea()
-        scroll_area.setWidgetResizable(True)
-        # scroll_area.setWidget(self.table)
-        scroll_area.setWidget(container)
-        
-        self.layout.addWidget(scroll_area)
-        # self.layout.addStretch()
-         
-        # Connect signals
-        self.table.doubleClicked.connect(self.on_row_double_click)
-
-        # add the export button here
-        
-        self.export_btn = QPushButton("Export Excel")
-        self.export_btn.setObjectName("endorsement-export-btn")
-
-        btn_container = QHBoxLayout()
-        btn_container.addWidget(self.export_btn)
-        btn_container.addStretch()
-        self.layout.addLayout(btn_container)
-        self.export_btn.clicked.connect(self.export_to_excel)
-
-        # self.layout.addWidget(self.export_btn)
-        
-        if self.view_type and self.view_type == "endorsement-create":
-            self.export_btn.hide()
-
-    def export_to_excel(self):
-        """Export table data to Excel file."""
-        try:
-            # Get save file path
-            path, _ = QFileDialog.getSaveFileName(
-                self,
-                "Save as Excel",
-                "Endorsement_Summary",
-                "Excel Files (*.xlsx)"
-            )
-            
-            if not path:
-                return
-
-            # Create DataFrame from table data
-            data = []
-            for row in range(self.table.rowCount()):
-                row_data = []
-                for col in range(self.table.columnCount()):
-                    item = self.table.item(row, col)
-                    row_data.append(item.text() if item else "")
-                data.append(row_data)
-
-            headers = [self.table.horizontalHeaderItem(i).text() 
-                      for i in range(self.table.columnCount())]
-            
-            df = pd.DataFrame(data, columns=headers)
-            
-            # Export using pandas
-            df.to_excel(path, index=False)
-            StyledMessageBox.information(
-                self, 
-                "Success", 
-                f"Exported to {path}"
-            )
-            
-        except Exception as e:
-            StyledMessageBox.critical(
-                self, 
-                "Error", 
-                f"Export failed: {str(e)}"
-            )
-
-    def load_data(self):
-        """Load data from database."""
-        try:
-            session = self.Session()
-            endorsements = session.query(EndorsementModel)\
-                .order_by(EndorsementModel.t_date_endorsed.desc(), 
-                        EndorsementModel.t_refno.desc())\
-                .all()
-            
-            self.table.setRowCount(len(endorsements))
-            
-            for row, endorsement in enumerate(endorsements):
-                self._set_table_item(row, 0, endorsement.t_refno)
-                self._set_table_item(row, 1, endorsement.t_date_endorsed.strftime("%Y-%m-%d"))
-                self._set_table_item(row, 2, endorsement.t_category.value)
-                self._set_table_item(row, 3, endorsement.t_prodcode)
-                self._set_table_item(row, 4, endorsement.t_lotnumberwhole)
-                self._set_table_item(row, 5, f"{endorsement.t_qtykg:.2f}")
-                self._set_table_item(row, 6, endorsement.t_status.value)
-                self._set_table_item(row, 7, endorsement.t_endorsed_by)
-            
-            self.table.verticalHeader().setDefaultSectionSize(24)
-            self.table.verticalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Fixed)
-            self.table.resizeColumnsToContents()
-        finally:
-            session.close()
-    
-    def _set_table_item(self, row: int, col: int, value: str):
-        """Helper method to set table items."""
-        item = QTableWidgetItem(str(value))
-        item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
-        self.table.setItem(row, col, item)
-    
-    def on_row_double_click(self, index):
-        """Emit signal when row is double-clicked."""
-        ref_no = self.table.item(index.row(), 0).text()
-        self.double_clicked.emit(ref_no)
-    
-    def show_context_menu(self, pos):
-        # Get the clicked row
-        row = self.table.rowAt(pos.y())
-        
-        if row < 0:  # Clicked outside a row
-            return
-        
-        # EXTRACT SPECIFIC VALUES FROM THE ROW
-        # the number should match the index based on the table layout
-        ref_no = self.table.item(row, 0).text() if self.table.item(row, 0) else "N/A"
-        product_code = self.table.item(row, 3).text() if self.table.item(row, 3) else "N/A"
-
-        # Create the menu
-        menu = QMenu(self)
-
-        # Add actions
-        edit_action = menu.addAction("Edit Record")
-        delete_action = menu.addAction("Delete Record")
-        add_action = menu.addAction("Add New Record")
-
-        # Connect actions to functions
-        edit_action.triggered.connect(lambda: print(f"Edit action triggered - Row: {row}, Ref No: {ref_no}, Product Code: {product_code}"))
-        delete_action.triggered.connect(lambda: print(f"Delete action triggered - Row: {row}, Ref No: {ref_no}, Product Code: {product_code}"))
-        add_action.triggered.connect(lambda: print(f"Add action triggered from Row: {row}, Ref No: {ref_no}"))
-
-        # Show the menu at the cursor position
-        menu.exec(self.table.viewport().mapToGlobal(pos))
-
 class EndorsementListView(QWidget):
     """View with filters and table"""
     def __init__(self, session_factory, parent=None):
@@ -990,6 +626,7 @@ class EndorsementListView(QWidget):
 
         self.date_from = QDateEdit(calendarPopup=True)
         self.date_to = QDateEdit(calendarPopup=True)
+        
         self.search_button = QPushButton("Search")
         self.search_button.setObjectName("endorsementList-search-btn")
 
@@ -1007,8 +644,9 @@ class EndorsementListView(QWidget):
         bottom_filter_layout.addWidget(self.search_button)
 
         # --- Table setup ---
-        self.table = EndorsementTableWidget(
+        self.table = TableWidget(
             session_factory=self.Session,
+            db_model=EndorsementModel,
             view_type="endorsement-list"
         )
 
@@ -1036,33 +674,6 @@ class EndorsementListView(QWidget):
         for category in CategoryEnum:
             self.category_filter.addItem(category.value, category)
 
-class EndorsementUpdateView(QWidget):
-    """View for updating/deleting records"""
-    def __init__(self, session_factory, parent=None):
-        super().__init__(parent)
-        self.Session = session_factory
-        self.setup_ui()
-        
-    def setup_ui(self):
-        layout = QVBoxLayout()
-        
-        # Form (could reuse your form with some modifications)
-        # self.form = EndorsementFormWidget()
-        
-        # Buttons
-        button_layout = QHBoxLayout()
-        self.update_button = QPushButton("Update")
-        self.delete_button = QPushButton("Delete")
-        self.cancel_button = QPushButton("Cancel")
-        
-        button_layout.addWidget(self.update_button)
-        button_layout.addWidget(self.delete_button)
-        button_layout.addWidget(self.cancel_button)
-        
-        # layout.addWidget(self.form)
-        layout.addLayout(button_layout)
-        self.setLayout(layout)
-
 class EndorsementMainView(QWidget):
     def __init__(self, session_factory, parent=None):
         super().__init__(parent)
@@ -1072,7 +683,7 @@ class EndorsementMainView(QWidget):
         
     def setup_ui(self):
         self.layout = QVBoxLayout()
-        
+
         # Navigation buttons
         nav_layout = QHBoxLayout()
         self.create_btn = QPushButton("Create New")
@@ -1088,15 +699,13 @@ class EndorsementMainView(QWidget):
         self.stacked_widget = QStackedWidget()
         
         # Create views
-        self.create_view = EndorsementView(self.Session)
+        self.create_view = EndorsementCreateView(self.Session)
         self.list_view = EndorsementListView(self.Session)
-        self.update_view = EndorsementUpdateView(self.Session)
         
         # Add to stack
         self.stacked_widget.addWidget(self.create_view)
         self.stacked_widget.addWidget(self.list_view)
-        self.stacked_widget.addWidget(self.update_view)
-        
+
         # Connect signals
         self.create_btn.clicked.connect(lambda: self.stacked_widget.setCurrentWidget(self.create_view))
         self.list_btn.clicked.connect(lambda: self.stacked_widget.setCurrentWidget(self.list_view))
@@ -1122,6 +731,7 @@ class EndorsementMainView(QWidget):
         try:
             session = self.Session()
             record = session.query(EndorsementModel).filter_by(t_refno=ref_no).first()
+
             if record:
                 # Populate the update form with record data
                 self.update_view.form.load_data(record)

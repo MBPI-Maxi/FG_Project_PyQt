@@ -28,6 +28,7 @@ class EndorsementModel(Base):
     t_wtlot = Column(Float, nullable=False)
     t_status = Column(Enum(StatusEnum), nullable=False, default=StatusEnum.FAILED.value)
     t_endorsed_by = Column(String, nullable=False)
+    t_remarks = Column(String(100), nullable=True)
 
     is_deleted = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -48,9 +49,10 @@ class EndorsementModelT2(Base):
     t_lotnumbersingle = Column(String(10), nullable=False, unique=True)
     t_qty = Column(Float, nullable=False)
     is_deleted = Column(Boolean, default=False)
+    t_remarks = Column(String(100), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now()) 
     updated_at = Column(DateTime(timezone=True), server_default=func.now())
-
+    
     endorsement_parent = relationship("EndorsementModel", back_populates="endorsement_t2_items")
 
     __table_args__ = (

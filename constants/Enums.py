@@ -40,3 +40,6 @@ class StatusEnum(Enum):
     PASSED = "PASSED"
     FAILED = "FAILED"
 
+class RemarksEnum(Enum):
+    NO_REMARKS = "No Remarks"
+    OVERSIZE = "OVER-SIZED"

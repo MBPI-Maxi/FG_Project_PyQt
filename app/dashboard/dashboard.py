@@ -3,7 +3,6 @@ from PyQt6.QtWidgets import (
     QPushButton, QLabel, QFrame, QStackedWidget, QStatusBar
 )
 from app.views import (
-    EndorsementView,
     EndorsementMainView,
     QCFailedToPassed,
     QCLabExcess,
@@ -44,22 +43,9 @@ class FGDashboard(QMainWindow):
         self.role = role
         self.login_widget = login_widget
 
-        # VIEWS
-        self.form_views = [
-            EndorsementView,
-            QCFailedEndorsement,
-            QCLabExcess,
-            ReceivingReport,
-            DeliveryReceipt,
-            ReturnReplacement,
-            OutgoingRecord,
-            RequisitionLogbook,
-            QCFailedEndorsement
-        ]
-        
-
         self.setWindowTitle("FG Dashboard")
-        self.setGeometry(100, 100, 1300, 800)
+        # self.setGeometry(100, 100, 1300, 800)
+        self.resize(1600, 720)
         # self.icon_maximize = qta.icon("fa5s.expand-arrows-alt", color="#ecf0f1")
         self.setWindowIcon(qta.icon("fa5s.tachometer-alt", color="steelblue"))
 
@@ -80,7 +66,6 @@ class FGDashboard(QMainWindow):
 
         # INITIALIZED STACK (index by order)
         # INCOMING
-        # self.add_stack_page("Endorsement", "Endorsement", EndorsementView(session_factory=self.Session))
         self.add_stack_page("Endorsement", "Endorsement", EndorsementMainView(session_factory=self.Session))
         self.add_stack_page("QC Failed to Passed", "QC Failed to Passed", QCFailedToPassed())
         self.add_stack_page("QC Lab Excess", "QC Lab Excess", QCLabExcess())
@@ -102,6 +87,7 @@ class FGDashboard(QMainWindow):
         # ADD THE MAIN WIDGET
         self.main_layout.addWidget(self.stacked_widget)
         self.setCentralWidget(self.main_widget)
+        # self.showFullScreen()
 
     def set_username(self, value):
         self.username = value
@@ -256,7 +242,8 @@ class FGDashboard(QMainWindow):
 
         main_page = QWidget()
         layout = QVBoxLayout(main_page)
-        layout.setContentsMargins(40, 40, 40, 40)
+        # layout.setContentsMargins(40, 40, 40, 40)
+        layout.setContentsMargins(20, 10, 10, 10)
 
         title_label = QLabel(title)
         title_label.setFont(QFont("Segoe UI", 24, QFont.Weight.Bold))
