@@ -1,22 +1,23 @@
 from config.db import is_connected, engine
-from models import Base
-
-# this should be imported so Base(declarative_base) will able to read the EndorsementModel
-def import_models():
-    from models.Endorsement import EndorsementModel
+from sqlalchemy.orm import sessionmaker
+from app.auth.login import LoginForm
+from PyQt6.QtWidgets import QApplication
+from config.pyqtConfig import print_connection_status, enforce_light_theme
+import sys
 
 if __name__ == "__main__":
+    print_connection_status(is_connected, engine)
+    
     if is_connected == True:
-        print("Database is connected.")
-
-        # import the models here
-        import_models()
-
-        # create the tables using this commands
-        # Base.metadata.create_all(engine)
+        app = QApplication(sys.argv)
+        enforce_light_theme(app)
 
         # load the login application here
+        session_factory = sessionmaker(engine)
 
+        login_view = LoginForm(session_factory=session_factory)
+        login_view.show()
 
+        sys.exit(app.exec())
     else:
-        print(f"Failed to connect to the database: {is_connected}")
+        sys.exit(1)
