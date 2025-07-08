@@ -36,6 +36,12 @@ class CategoryEnum(Enum):
     MB = "MB"
     DC = "DC"
 
+class MBDefaultValue(Enum):
+    """
+    This is the default value of the kilo per bag for Masterbatch Category
+    """
+    KG = 25
+
 class StatusEnum(Enum):
     PASSED = "PASSED"
     FAILED = "FAILED"

@@ -97,6 +97,15 @@ class FGDashboard(QMainWindow):
         self.role = value
     
     def setup_status_bar(self):
+        def create_separator():
+            separator = QLabel(" | ")
+            separator.setStyleSheet("""
+                color: grey;
+                padding: 0 5px;
+            """)
+
+            return separator
+
         self.status_bar = QStatusBar()
         self.setStatusBar(self.status_bar)
 
@@ -109,15 +118,24 @@ class FGDashboard(QMainWindow):
 
         self.time_label = QLabel()
         self.time_label.setObjectName("FGDashboard-status-time-label")
+
+        self.powered_by_software = QLabel("Powered by PYQT6")
+        self.program_credits = QLabel("Developed by: IT Department Team")
         
         # icon for db_status_icon_label
         self.db_status_icon_label.setPixmap(
             qta.icon("fa5s.check-circle", color="green").pixmap(QSize(16, 16))
         )
         self.db_status_text_label.setText("DB Connected ")
-
+        
+        self.status_bar.addPermanentWidget(self.powered_by_software)
+        self.status_bar.addPermanentWidget(create_separator())
+        
+        self.status_bar.addPermanentWidget(self.program_credits)
+        self.status_bar.addPermanentWidget(create_separator())
         self.status_bar.addPermanentWidget(self.db_status_icon_label)
         self.status_bar.addPermanentWidget(self.db_status_text_label)
+        self.status_bar.addPermanentWidget(create_separator())
         self.status_bar.addPermanentWidget(self.time_label)
 
         self.status_timer = QTimer(self)

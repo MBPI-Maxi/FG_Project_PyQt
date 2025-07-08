@@ -7,7 +7,7 @@ from PyQt6.QtWidgets import (
 
 from app.helpers import (
     fetch_current_t_refno_in_endorsement,
-    generate_endorsement_table_2,
+    populate_endorsement_items,
     button_cursor_pointer
 ) 
 
@@ -22,7 +22,7 @@ from constants.Enums import StatusEnum, CategoryEnum, RemarksEnum
 from constants.mapped_user import mapped_user_to_display
 
 # MODELS
-from models import User, EndorsementModel, EndorsementModelT2
+from models import User, EndorsementModel, EndorsementModelT2, EndorsementLotExcessModel
 
 # ENDORSEMENT SCHEMA
 from app.views.validatorSchema import EndorsementFormSchema
@@ -93,7 +93,7 @@ class EndorsementCreateView(QWidget):
         
         self.init_ui()
         self.apply_styles()
-    
+
     @overload
     def create_input_horizontal_layout(
         self,
@@ -185,9 +185,16 @@ class EndorsementCreateView(QWidget):
         self.save_button = QPushButton("Save Endorsement")
         self.save_button.setObjectName("endorsement-save-btn")
         self.save_button.clicked.connect(self.save_endorsement)
-        
-        self.main_layout.addWidget(self.save_button)
 
+        # --------------- test_btn ----------------------------
+        self.test_btn = QPushButton("Click to test output")
+        self.test_btn.clicked.connect(
+            lambda: print(self.t_category_input.currentText() == CategoryEnum.MB.value)
+        )
+
+        self.main_layout.addWidget(self.save_button)
+        self.main_layout.addWidget(self.test_btn)
+        
         # form table
         splitter = QSplitter(Qt.Orientation.Vertical)
         form_container = QWidget()
@@ -460,8 +467,8 @@ class EndorsementCreateView(QWidget):
         self.clear_error_messages() # Clear previous errors first
 
         for error in errors:
-            field = error['loc'][0] # 'loc' is a tuple, first element is the field name
-            message = error['msg']
+            field = error["loc"][0] # 'loc' is a tuple, first element is the field name
+            message = error["msg"]
             
             error_label_key = f"{field}_error"
             
@@ -488,22 +495,34 @@ class EndorsementCreateView(QWidget):
 
             # Validate the data using your Pydantic schema
             validated_data = EndorsementFormSchema(**form_data)
+
             # print(validated_data.model_dump_json(indent=2)) 
             # if the form is valid store this in the database.
             endorsement = EndorsementModel(**validated_data.model_dump())
                 
             # if the endorsement is correct store the data to the endorsement table 2 data.
-            generate_endorsement_table_2(
-                endorsement,
-                EndorsementModelT2, 
-                validated_data
+            # generate_endorsement_table_2(
+            #     endorsement_model=endorsement,
+            #     endorsement_model_t2=EndorsementModelT2, 
+            #     validated_data=validated_data,
+            #     category=self.t_category_input.currentText(),
+            #     has_excess=self.has_excess_checkbox.isChecked()
+            # )
+
+            populate_endorsement_items(
+                endorsement_model=endorsement,
+                endorsement_model_t2=EndorsementModelT2,
+                endorsement_lot_excess_model=EndorsementLotExcessModel,
+                validated_data=validated_data,
+                category=self.t_category_input.currentText(),
+                has_excess=self.has_excess_checkbox.isChecked()
             )
-            
-            session.add(endorsement) 
-        except ValidationError as e:
+
+            session.add(endorsement)
+            # session.add_all(excess_items)
+        except ValidationError as e:            
             # Handle validation errors
             print("Validation Errors: {}".format(e))
-            
             self.display_errors(e.errors())
             
             StyledMessageBox.warning(
@@ -511,12 +530,14 @@ class EndorsementCreateView(QWidget):
                 "Validation Error",
                 "Please correct the errors in the form"
             )
+            
         except Exception as e:
             StyledMessageBox.critical(
                 self,
                 "Error",
                 f"An unexpected error occurred: {e}"
             )
+
         else:
             # commit the changes if all transaction in the try block is valid
             session.commit()
@@ -580,7 +601,7 @@ class EndorsementCreateView(QWidget):
 
 class EndorsementListView(QWidget):
     """View with filters and table"""
-    def __init__(self, session_factory, parent=None):
+    def __init__(self, session_factory: Callable[..., Session], parent=None):
         super().__init__(parent)
         self.Session = session_factory
         self.setup_ui()
@@ -591,66 +612,8 @@ class EndorsementListView(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(6)
 
-        # --- Top row filter layout ---
-        top_filter_layout = QHBoxLayout()
-        top_filter_layout.setContentsMargins(0, 0, 0, 0)
-        top_filter_layout.setSpacing(6)
-
-        self.category_filter = QComboBox()
-        self.status_filter = QComboBox()
-        self.prod_code_input = QLineEdit()
-        self.ref_no_input = QLineEdit()
-
-        category_label = QLabel("Category:")
-        status_label = QLabel("Status:")
-        prod_code_label = QLabel("Prod Code:")
-        ref_no_label = QLabel("Ref No:")
-
-        for label in [category_label, status_label, prod_code_label, ref_no_label]:
-            label.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
-
-        top_filter_layout.addWidget(category_label)
-        top_filter_layout.addWidget(self.category_filter)
-        top_filter_layout.addWidget(status_label)
-        top_filter_layout.addWidget(self.status_filter)
-        top_filter_layout.addWidget(prod_code_label)
-        top_filter_layout.addWidget(self.prod_code_input)
-        top_filter_layout.addWidget(ref_no_label)
-        top_filter_layout.addWidget(self.ref_no_input)
-        top_filter_layout.addStretch()  # Push items to the left
-
-        # --- Bottom row filter layout ---
-        bottom_filter_layout = QHBoxLayout()
-        bottom_filter_layout.setContentsMargins(0, 0, 0, 0)
-        bottom_filter_layout.setSpacing(6)
-
-        self.date_from = QDateEdit(calendarPopup=True)
-        self.date_to = QDateEdit(calendarPopup=True)
-        
-        self.search_button = QPushButton("Search")
-        self.search_button.setObjectName("endorsementList-search-btn")
-
-        from_label = QLabel("From:")
-        to_label = QLabel("To:")
-
-        for label in [from_label, to_label]:
-            label.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
-
-        bottom_filter_layout.addWidget(from_label)
-        bottom_filter_layout.addWidget(self.date_from)
-        bottom_filter_layout.addWidget(to_label)
-        bottom_filter_layout.addWidget(self.date_to)
-        bottom_filter_layout.addStretch()  # Push search button to the right
-        bottom_filter_layout.addWidget(self.search_button)
-
-        # --- Table setup ---
-        self.table = TableWidget(
-            session_factory=self.Session,
-            db_model=EndorsementModel,
-            view_type="endorsement-list"
-        )
-
-        self.table.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        top_filter_layout, bottom_filter_layout = self.create_filter_layout()
+        self.table = self.show_table()
 
         # Add all to main layout
         layout.addLayout(top_filter_layout)
@@ -670,12 +633,97 @@ class EndorsementListView(QWidget):
         except FileNotFoundError:
             print("Warning: Style file not found. Default styles will be used.")
     
+    def show_table(self):
+        table = TableWidget(
+            session_factory=self.Session,
+            db_model=EndorsementModel,
+            view_type="endorsement-list"
+        )
+        table.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        
+        return table
+
     def create_category_menu(self):
         for category in CategoryEnum:
             self.category_filter.addItem(category.value, category)
 
+    def create_filter_layout(self):
+        # FILTERS
+        self.category_filter = QComboBox()
+        self.status_filter = QComboBox()
+        self.prod_code_input = QLineEdit()
+        self.ref_no_input = QLineEdit()
+
+        # LABELS FOR THE FILTERS
+        category_label = QLabel("Category:")
+        status_label = QLabel("Status:")
+        prod_code_label = QLabel("Prod Code:")
+        ref_no_label = QLabel("Ref No:")
+        from_label = QLabel("From:")
+        to_label = QLabel("To:")
+
+        # DATES
+        self.date_from = QDateEdit(calendarPopup=True)
+        self.date_to = QDateEdit(calendarPopup=True)
+
+        # QPushButton
+        self.search_button = QPushButton("Search")
+        self.search_button.setObjectName("endorsementList-search-btn")
+
+        # --- Top row filter layout ---
+        top_filter_layout = QHBoxLayout()
+        top_filter_layout.setContentsMargins(0, 0, 0, 0)
+        top_filter_layout.setSpacing(6)
+
+        # --- Bottom row filter layout ---
+        bottom_filter_layout = QHBoxLayout()
+        bottom_filter_layout.setContentsMargins(0, 0, 0, 0)
+        bottom_filter_layout.setSpacing(6)
+        
+        # SIZE POLICY
+        category_label.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        status_label.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        prod_code_label.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        ref_no_label.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        from_label.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        to_label.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+
+        # --- Top row add widget ---
+        top_filter_layout.addWidget(category_label)
+        top_filter_layout.addWidget(self.category_filter)
+        top_filter_layout.addWidget(status_label)
+        top_filter_layout.addWidget(self.status_filter)
+        top_filter_layout.addWidget(prod_code_label)
+        top_filter_layout.addWidget(self.prod_code_input)
+        top_filter_layout.addWidget(ref_no_label)
+        top_filter_layout.addWidget(self.ref_no_input)
+        top_filter_layout.addStretch() # PUSH ITEMS TO THE LEFT
+
+        # --- Bottom row filter layout ---
+        bottom_filter_layout.addWidget(from_label)
+        bottom_filter_layout.addWidget(self.date_from)
+        bottom_filter_layout.addWidget(to_label)
+        bottom_filter_layout.addWidget(self.date_to)
+        bottom_filter_layout.addStretch() # push the search button to the right
+        bottom_filter_layout.addWidget(self.search_button)
+
+        return (
+            top_filter_layout, 
+            bottom_filter_layout
+        )
+    
+    # TODO
+    def filter_function(self):
+        session = self.Session
+
+        try:
+            # filtered_query = session.query(EndorsementModel).join
+            pass
+        finally:
+            session.close()
+
 class EndorsementMainView(QWidget):
-    def __init__(self, session_factory, parent=None):
+    def __init__(self, session_factory: Callable[..., Session], parent=None):
         super().__init__(parent)
         self.Session = session_factory
         self.setup_ui()
@@ -738,3 +786,4 @@ class EndorsementMainView(QWidget):
                 self.stacked_widget.setCurrentWidget(self.update_view)
         finally:
             session.close()
+    

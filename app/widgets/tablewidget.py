@@ -69,7 +69,6 @@ class TableWidget(QWidget):
         )
         self.layout = QVBoxLayout(self)
 
-
         # CREATE THE ACTUAL TABLE HERE
         self.table = QTableWidget()
         self.table.setObjectName("endorsementTable")
@@ -122,8 +121,8 @@ class TableWidget(QWidget):
         self.prev_btn.clicked.connect(self.prev_page)
         self.prev_btn.setObjectName("tablewidget-prev-btn")
 
-
         self.page_label = QLabel(f"Page {self.current_page} of {self.total_pages}")
+        self.page_label.setObjectName("table-widget-page-label")
         
         self.next_btn = QPushButton("Next")
         self.next_btn.clicked.connect(self.next_page)
@@ -136,6 +135,7 @@ class TableWidget(QWidget):
         self.items_per_page_combo.setObjectName("table-widget-items-per-page-combo")
 
         self.items_per_page_label = QLabel("Items per page:")
+        self.items_per_page_label.setObjectName("table-widget-items-per-page-label")
 
         self.pagination_layout.addWidget(self.items_per_page_label)
         self.pagination_layout.addWidget(self.items_per_page_combo)
@@ -204,11 +204,6 @@ class TableWidget(QWidget):
         self.table.horizontalHeader().setSectionResizeMode(6, QHeaderView.ResizeMode.Interactive)
         self.table.horizontalHeader().setSectionResizeMode(7, QHeaderView.ResizeMode.Interactive) # And for the last column too
 
-        # Style pagination buttons and combo box (you can add more styles to table.css)
-        
-        self.page_label.setStyleSheet("QLabel { font-weight: bold; padding: 0 10px; }")
-        self.items_per_page_label.setStyleSheet("QLabel { padding-left: 5px; }")
-
     def export_to_excel(self):
         """Export table data to Excel file."""
         try:
@@ -271,15 +266,13 @@ class TableWidget(QWidget):
             offset = (self.current_page - 1) * self.items_per_page
             limit = self.items_per_page
 
-            endorsements = session.query(endorsement_model)\
-                .order_by(endorsement_model.t_date_endorsed.desc(), endorsement_model.t_refno.desc())\
-                .offset(offset)\
-                .limit(limit)\
-                .all()
+            # ADD A JOIN CLAUSE HERE SO THAT DATA FROM THE TABLE ENDORSEMENT 1
+            endorsements = session.query(endorsement_model).order_by(endorsement_model.t_date_endorsed.desc(), endorsement_model.t_refno.desc()).offset(offset).limit(limit).all()
 
             self.table.setRowCount(len(endorsements))
 
             for row, endorsement in enumerate(endorsements):
+                # for each entry on the endorsement model the rows are being populated.
                 self._set_table_item(row, 0, endorsement.t_refno)
                 self._set_table_item(row, 1, endorsement.t_date_endorsed.strftime("%Y-%m-%d"))
                 self._set_table_item(row, 2, endorsement.t_category.value)
@@ -331,8 +324,6 @@ class TableWidget(QWidget):
         # Connect actions to functions
         # TODO: Add a dialog box before they edit anything
         edit_action.triggered.connect(lambda: print(f"Edit action triggered - Row: {row}, Ref No: {ref_no}, Product Code: {product_code}"))
-        # delete_action.triggered.connect(lambda: print(f"Delete action triggered - Row: {row}, Ref No: {ref_no}, Product Code: {product_code}"))
-        # add_action.triggered.connect(lambda: print(f"Add action triggered from Row: {row}, Ref No: {ref_no}"))
 
         # Show the menu at the cursor position
         menu.exec(self.table.viewport().mapToGlobal(pos))

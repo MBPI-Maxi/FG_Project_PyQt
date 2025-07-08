@@ -48,13 +48,42 @@ class EndorsementModelT2(Base):
     t_refno = Column(String, ForeignKey("tbl_endorsement_t1.t_refno"), nullable=False)
     t_lotnumbersingle = Column(String(10), nullable=False, unique=True)
     t_qty = Column(Float, nullable=False)
+    # t_has_excess = Column(Boolean, default=False) just omit this because I already have a table for the excess items
     is_deleted = Column(Boolean, default=False)
     t_remarks = Column(String(100), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now()) 
     updated_at = Column(DateTime(timezone=True), server_default=func.now())
     
+    # relationship
     endorsement_parent = relationship("EndorsementModel", back_populates="endorsement_t2_items")
+    lot_excess = relationship(
+        "EndorsementLotExcessModel",
+        back_populates="lot",
+        uselist=False,
+        cascade="all, delete-orphan"
+    )
 
     __table_args__ = (
         UniqueConstraint("t_refno", "t_lotnumbersingle", name="uq_refno_lot"),
     )
+
+
+class EndorsementLotExcessModel(Base):
+    __tablename__ = "tbl_endorsement_lot_excess"
+
+    t_id = Column(Integer, primary_key=True, autoincrement=True)
+    t_lotnumber = Column(
+        String(10),
+        ForeignKey("tbl_endorsement_t2.t_lotnumbersingle"),
+        nullable=False,
+        unique=True  # ensures one-to-one mapping
+    )
+    t_excess_amount = Column(
+        Float,
+        nullable=False
+    )
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    lot = relationship("EndorsementModelT2", back_populates="lot_excess")

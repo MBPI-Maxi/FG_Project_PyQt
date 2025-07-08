@@ -110,3 +110,12 @@ QComboBox#table-widget-items-per-page-combo::drop-down {
     border-top-right-radius: 3px;
     border-bottom-right-radius: 3px;
 }
+
+QLabel#table-widget-page-label {
+    font-weight: bold;
+    padding: 0 10px;
+}
+
+QLabel#table-widget-items-per-page-label {
+    padding-left: 5px;
+}
