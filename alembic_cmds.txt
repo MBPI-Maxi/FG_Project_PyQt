@@ -18,4 +18,4 @@ DROP TYPE categoryenum;
 DROP TYPE statusenum;
 
 # check for type of Enum
-SELECT unnest(enum_range(NULL::department));
+SELECT unnest(enum_range(NULL::department)); 

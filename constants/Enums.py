@@ -1,4 +1,5 @@
 from enum import Enum
+from typing import Literal
 
 # IT super password
 class ITCredentials(Enum):
@@ -49,3 +50,35 @@ class StatusEnum(Enum):
 class RemarksEnum(Enum):
     NO_REMARKS = "No Remarks"
     OVERSIZE = "OVER-SIZED"
+
+class TableHeader():
+    LABELS = {
+        "endorsement": [
+            "Ref No", "Date Endorse", "Category", 
+            "Product Code", "Lot Number", 
+            "Qty (kg)", "Status", "Endorsed By"
+        ]
+    }
+
+    @classmethod
+    def get_header(
+        cls, 
+        header_name: Literal[
+            "endorsement",
+            "deliveryReceipt",
+            "outgoingRecord",
+            "qcFailedEndorsement",
+            "qcFailedToPassed",
+            "qcLabExcess",
+            "receivingReport",
+            "requisitionLogbook",
+            "returnReplacement"
+        ]
+    ):
+        if not isinstance(header_name, str):
+            raise ValueError("header_name datatype is incorrect.")
+        
+        if header_name not in cls.LABELS:
+            raise ValueError("header_name value is not valid.")
+
+        return cls.LABELS.get(header_name)

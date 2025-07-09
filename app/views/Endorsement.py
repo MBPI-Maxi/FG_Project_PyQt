@@ -16,6 +16,7 @@ from pydantic import ValidationError
 
 from typing import Union, overload, Callable, Type
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 
 from app.StyledMessage import StyledMessageBox
 from constants.Enums import StatusEnum, CategoryEnum, RemarksEnum
@@ -32,6 +33,7 @@ from app.widgets.lineedits import LotNumberLineEdit
 from app.widgets.tablewidget import TableWidget
 
 import os
+import math
 
 # --- ENDORSEMENT VIEW LOGIC IS HERE ---
 class EndorsementCreateView(QWidget):
@@ -192,6 +194,12 @@ class EndorsementCreateView(QWidget):
             lambda: print(self.t_category_input.currentText() == CategoryEnum.MB.value)
         )
 
+        # ---------------- real-time connection -----------------------
+        self.t_lotnumberwhole_input.textChanged.connect(self.validate_lot_quantity)
+        self.t_qtykg_input.valueChanged.connect(self.validate_lot_quantity)
+        self.t_wtlot_input.valueChanged.connect(self.validate_lot_quantity)
+        self.has_excess_checkbox.stateChanged.connect(self.validate_lot_quantity)
+
         self.main_layout.addWidget(self.save_button)
         self.main_layout.addWidget(self.test_btn)
         
@@ -210,6 +218,168 @@ class EndorsementCreateView(QWidget):
         container_layout.addWidget(splitter)
         self.setLayout(container_layout)
     
+    # OLD CODE
+    # def validate_lot_quantity(self):
+    #     """Real-time validation of lot quantity proportion"""
+    #     try:
+    #         lot_text = self.t_lotnumberwhole_input.text()
+    #         qty = self.t_qtykg_input.value()
+    #         wtlot = self.t_wtlot_input.value()
+    #         has_excess = self.has_excess_checkbox.isChecked()
+            
+    #         if not lot_text or wtlot <= 0:
+    #             return
+                
+    #         if "-" in lot_text:
+    #             try:
+    #                 start, end = lot_text.split("-")
+    #                 start_num = int(start[:4])
+    #                 end_num = int(end[:4])
+    #                 num_lots = (end_num - start_num) + 1
+    #                 expected_full = num_lots * wtlot
+                    
+    #                 if has_excess:
+    #                     if qty < (expected_full - wtlot):
+    #                         self.show_quantity_error(
+    #                             f"Quantity too small for lot range. Min: {expected_full - wtlot}"
+    #                         )
+    #                         return
+    #                 else:
+    #                     if not math.isclose(qty, expected_full, rel_tol=1e-5):
+    #                         self.show_quantity_error(
+    #                             f"Quantity should be exactly {expected_full} for this lot range"
+    #                         )
+    #                         return
+                            
+    #                 # Check if should have excess
+    #                 if not has_excess and not math.isclose(qty, expected_full, rel_tol=1e-5):
+    #                     self.show_quantity_error(
+    #                         f"Quantity suggests excess (expected {expected_full}). Check 'has excess'"
+    #                     )
+    #                     return
+                        
+    #             except (ValueError, IndexError):
+    #                 # Invalid lot format - will be caught by other validators
+    #                 return
+    #         else:
+    #             # Single lot
+    #             if not has_excess and not math.isclose(qty, wtlot, rel_tol=1e-5):
+    #                 self.show_quantity_error(
+    #                     f"Quantity should be exactly {wtlot} for single lot"
+    #                 )
+    #                 return
+                    
+    #         # Clear error if validation passed
+    #         self.form_fields["t_qtykg_error"].setText("")
+    #         self.t_qtykg_input.setStyleSheet("")
+            
+    #     except Exception as e:
+    #         print(f"Validation error: {e}")
+
+    def validate_lot_quantity(self):
+        """Real-time validation of lot quantity proportion (shows warnings instead of errors)"""
+        try:
+            lot_text = self.t_lotnumberwhole_input.text()
+            qty = self.t_qtykg_input.value()
+            wtlot = self.t_wtlot_input.value()
+            has_excess = self.has_excess_checkbox.isChecked()
+            
+            # Clear any existing messages if fields are empty
+            if not lot_text or wtlot <= 0:
+                self.form_fields["t_qtykg_error"].setText("")
+                self.t_qtykg_input.setStyleSheet("")
+                return
+                
+            if "-" in lot_text:
+                try:
+                    start, end = lot_text.split("-")
+                    start_num = int(start[:4])
+                    end_num = int(end[:4])
+                    num_lots = (end_num - start_num) + 1
+                    expected_full = num_lots * wtlot
+                    
+                    if has_excess:
+                        if qty < (expected_full - wtlot):
+                            self.show_quantity_message(
+                                f"⚠️ Warning: Quantity seems low for this lot range (expected ~{expected_full})",
+                                is_warning=True
+                            )
+                            return
+                        elif qty > expected_full and not math.isclose(qty % wtlot, 0, abs_tol=1e-5):
+                            self.show_quantity_message(
+                                "⚠️ Note: Excess should be less than one full lot",
+                                is_warning=True
+                            )
+                            return
+                    else:
+                        if not math.isclose(qty, expected_full, rel_tol=1e-5, abs_tol=1e-5):
+                            self.show_quantity_message(
+                                f"💡 Tip: Quantity doesn't match exact lots (expected {expected_full}). "
+                                "Consider checking 'has excess' if appropriate",
+                                is_warning=True
+                            )
+                            return
+                            
+                    # Clear message if validation passes
+                    self.form_fields["t_qtykg_error"].setText("")
+                    self.t_qtykg_input.setStyleSheet("")
+                    return
+                    
+                except (ValueError, IndexError):
+                    # Invalid lot format - will be caught by other validators
+                    self.show_quantity_message("Invalid lot number format", is_warning=True)
+                    return
+            else:
+                # Single lot
+                if not has_excess and not math.isclose(qty, wtlot, rel_tol=1e-5, abs_tol=1e-5):
+                    self.show_quantity_message(
+                        f"💡 Tip: For single lot, quantity usually matches weight per lot ({wtlot}). "
+                        "Check 'has excess' if this is intentional",
+                        is_warning=True
+                    )
+                    return
+                    
+                # Clear message if validation passes
+                self.form_fields["t_qtykg_error"].setText("")
+                self.t_qtykg_input.setStyleSheet("")
+                return
+                
+        except Exception as e:
+            print(f"Validation warning: {e}")
+            return
+
+    # OLD CODE
+    # def show_quantity_error(self, message):
+    #     """Helper to display quantity validation error"""
+    #     self.form_fields["t_qtykg_error"].setText(message)
+    #     self.t_qtykg_input.setStyleSheet("border: 1px solid red;")
+    
+    def show_quantity_message(self, message, is_warning=False):
+        """Helper to display quantity validation message (warning or error)"""
+        error_label = self.form_fields["t_qtykg_error"]
+        error_label.setText(message)
+
+        if is_warning:
+            
+            self.t_qtykg_input.setStyleSheet("""
+                border: 1px solid #FFA500;
+                background-color: #FFFFE0;
+            """
+            )
+            error_label.setStyleSheet("""
+                color: #FF8C00;
+                font-style: italic;
+                margin-left: 5px;
+            """)        
+        else:
+            self.t_qtykg_input.setStyleSheet("""
+                border: 1px solid red;    
+            """)
+            error_label.setStyleSheet("""
+                color: red;
+                font-style: italic;
+            """)
+            
     def refresh_table(self):
         """Refresh table data."""
         # self.table_widget.load_data()
@@ -449,6 +619,7 @@ class EndorsementCreateView(QWidget):
             "t_wtlot": self.t_wtlot_input.value(),
             "t_status": self.t_status_input.currentData(), # Retrieves the stored Enum object
             "t_endorsed_by": self.t_endorsed_by_input.currentText(),
+            "t_has_excess": self.has_excess_checkbox.isChecked()
         }
 
     def clear_error_messages(self):
@@ -462,26 +633,58 @@ class EndorsementCreateView(QWidget):
                 if field_name in self.form_fields and isinstance(self.form_fields[field_name], (QLineEdit, QComboBox, QDateEdit, QDoubleSpinBox)):
                     self.form_fields[field_name].setStyleSheet("") # Clear any red borders etc.
 
+    # def display_errors(self, errors):
+    #     """Displays validation errors next to the corresponding fields."""
+    #     self.clear_error_messages() # Clear previous errors first
+
+    #     for error in errors:
+    #         field = error["loc"][0] # 'loc' is a tuple, first element is the field name
+    #         message = error["msg"]
+            
+    #         error_label_key = f"{field}_error"
+            
+    #         if error_label_key in self.form_fields:
+    #             self.form_fields[error_label_key].setText(message)
+                
+    #             # Optionally, highlight the input field itself
+    #             input_widget = self.form_fields.get(field)
+                
+    #             if input_widget:
+    #                 input_widget.setStyleSheet("border: 1px solid red;")
+    #         else:
+    #             print(f"Warning: No error label found for field '{field}'. Error: {message}")
+
     def display_errors(self, errors):
         """Displays validation errors next to the corresponding fields."""
-        self.clear_error_messages() # Clear previous errors first
+        self.clear_error_messages()  # Clear previous errors first
 
         for error in errors:
-            field = error["loc"][0] # 'loc' is a tuple, first element is the field name
-            message = error["msg"]
-            
-            error_label_key = f"{field}_error"
-            
-            if error_label_key in self.form_fields:
-                self.form_fields[error_label_key].setText(message)
+            # Handle both field-specific and model-level errors
+            if error["loc"]:
+                field = error["loc"][0]  # 'loc' is a tuple, first element is the field name
+                message = error["msg"]
                 
-                # Optionally, highlight the input field itself
-                input_widget = self.form_fields.get(field)
+                error_label_key = f"{field}_error"
                 
-                if input_widget:
-                    input_widget.setStyleSheet("border: 1px solid red;")
+                if error_label_key in self.form_fields:
+                    self.form_fields[error_label_key].setText(message)
+                    
+                    # Optionally, highlight the input field itself
+                    input_widget = self.form_fields.get(field)
+                    
+                    if input_widget:
+                        input_widget.setStyleSheet("border: 1px solid red;")
+                else:
+                    print(f"Warning: No error label found for field '{field}'. Error: {message}")
             else:
-                print(f"Warning: No error label found for field '{field}'. Error: {message}")
+                # Model-level error - show it in a general way (e.g., in quantity field)
+                message = error["msg"]
+
+                if "Quantity" in message:
+                    self.show_quantity_error(message)
+                else:
+                    # Fallback - show in status bar or as a message box
+                    StyledMessageBox.warning(self, "Validation Error", message)
 
     def save_endorsement(self):
         """Collects form data, validates it using Pydantic, and handles the result."""
@@ -500,15 +703,6 @@ class EndorsementCreateView(QWidget):
             # if the form is valid store this in the database.
             endorsement = EndorsementModel(**validated_data.model_dump())
                 
-            # if the endorsement is correct store the data to the endorsement table 2 data.
-            # generate_endorsement_table_2(
-            #     endorsement_model=endorsement,
-            #     endorsement_model_t2=EndorsementModelT2, 
-            #     validated_data=validated_data,
-            #     category=self.t_category_input.currentText(),
-            #     has_excess=self.has_excess_checkbox.isChecked()
-            # )
-
             populate_endorsement_items(
                 endorsement_model=endorsement,
                 endorsement_model_t2=EndorsementModelT2,
@@ -519,10 +713,10 @@ class EndorsementCreateView(QWidget):
             )
 
             session.add(endorsement)
-            # session.add_all(excess_items)
+            
+            # commit the changes if all transaction in the try block is valid
+            session.commit()
         except ValidationError as e:            
-            # Handle validation errors
-            print("Validation Errors: {}".format(e))
             self.display_errors(e.errors())
             
             StyledMessageBox.warning(
@@ -530,18 +724,21 @@ class EndorsementCreateView(QWidget):
                 "Validation Error",
                 "Please correct the errors in the form"
             )
-            
+        except IntegrityError as e:
+            StyledMessageBox.critical(
+                self,
+                "Error",
+                f"Item is already existing on the database. Please add another item: {e}"
+            ) 
+
         except Exception as e:
             StyledMessageBox.critical(
                 self,
                 "Error",
                 f"An unexpected error occurred: {e}"
             )
-
+        
         else:
-            # commit the changes if all transaction in the try block is valid
-            session.commit()
-
             StyledMessageBox.information(
                 self,
                 "Success",

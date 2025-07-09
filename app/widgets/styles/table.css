@@ -3,7 +3,7 @@ QTableWidget {
     alternate-background-color: #f5f5f5;
     gridline-color: #e0e0e0;
     border: 1px solid #d0d0d0;
-    font-size: 20px;
+    font-size: 16px;
     color: black
 }
 
@@ -19,7 +19,7 @@ QHeaderView::section {
     padding: 6px;
     border: 1px solid #d0d0d0;
     font-weight: bold;
-    font-size: 20px;
+    font-size: 16px;
     font-family: "Arial", "Segoe UI", "Roboto", sans-serif;
     letter-spacing: 0.5px;
 }
@@ -38,7 +38,6 @@ QHeaderView::section {
 
 QScrollBar:vertical {
     border: none;
-    /* background: #f0f0f0; */
     background: grey;
     background: transparent;
     width: 10px;
@@ -46,10 +45,13 @@ QScrollBar:vertical {
 }
 
 QScrollBar::handle:vertical {
-    /* background: #c0c0c0; */
-    background: transparent;
+    background: #b0b0b0;
     min-height: 20px;
-    border-radius: 4px;
+    /* border-radius: 4px; */
+}
+
+QScrollBar::handle:vertical:hover {
+    background: #888888;  
 }
 
 QScrollBar::add-line:vertical,

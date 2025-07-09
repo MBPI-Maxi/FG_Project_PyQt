@@ -4,11 +4,10 @@ from PyQt6.QtWidgets import QPushButton
 from sqlalchemy import text
 from sqlalchemy.orm import Session, DeclarativeMeta
 from typing import Type, Dict, Any
-from constants.Enums import CategoryEnum, MBDefaultValue
+from constants.Enums import CategoryEnum
 
 class ButtonCursorError(BaseException):
     pass
-
 
 # FOR CREATING CURSOR POINTER ON BUTTON
 def button_cursor_pointer(button_widget: Type[QPushButton]):

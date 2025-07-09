@@ -12,18 +12,9 @@ from typing import Union, Callable, Type
 from sqlalchemy.orm import Session, DeclarativeMeta
 from app.helpers import button_cursor_pointer
 from app.StyledMessage import StyledMessageBox
+from constants.Enums import TableHeader
 import pandas as pd
 import os
-
-# this is a mapping of the headers based on what view it is currently belong
-views_header_label_map = {
-    "endorsement": [
-        "Ref No", "Date Endorse", "Category", 
-        "Product Code", "Lot Number", 
-        "Qty (kg)", "Status", "Endorsed By"
-    ],
-    
-}
 
 class TableWidget(QWidget):
     double_clicked = pyqtSignal(str)
@@ -94,7 +85,7 @@ class TableWidget(QWidget):
         # if selfF.view_type and self.view_type == self.valid_views_to_show_export_btn[0]:
 
         if self.view_type and self.view_type.startswith("endorsement"):
-            self.table.setHorizontalHeaderLabels(views_header_label_map["endorsement"])
+            self.table.setHorizontalHeaderLabels(TableHeader.get_header("endorsement"))
 
         self.table.horizontalHeader().setStretchLastSection(True)
 

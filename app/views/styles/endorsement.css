@@ -107,3 +107,13 @@ QDateEdit#endorsement-date-endorsed-input QCalendarWidget QAbstractItemView:enab
     selection-background-color: #3a9eea;
     selection-color: white;
 }
+
+/* QLineEdit[warning="true"] {
+    border: 1px solid #FFA500;
+    background-color: #FFFFE0;
+} */
+
+/* Error message styling */
+/* QLineEdit[error="true"] {
+    border: 1px solid red;
+} */
