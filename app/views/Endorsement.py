@@ -23,7 +23,13 @@ from constants.Enums import StatusEnum, CategoryEnum, RemarksEnum
 from constants.mapped_user import mapped_user_to_display
 
 # MODELS
-from models import User, EndorsementModel, EndorsementModelT2, EndorsementLotExcessModel
+from models import (
+    User,
+    EndorsementModel,
+    EndorsementModelT2,
+    EndorsementLotExcessModel,
+    EndorsementCombinedView
+)   
 
 # ENDORSEMENT SCHEMA
 from app.views.validatorSchema import EndorsementFormSchema
@@ -85,14 +91,8 @@ class EndorsementCreateView(QWidget):
         self.setObjectName("EndorsementForm")
         
         self.Session = session_factory
-        # created a table widget (now seperate component)
-        self.table_widget = TableWidget(
-            session_factory=session_factory, 
-            db_model=EndorsementModel, 
-            view_type="endorsement-create", 
-            parent=self
-        )
-        
+        self.table_widget = self.show_table()
+       
         self.init_ui()
         self.apply_styles()
 
@@ -218,6 +218,17 @@ class EndorsementCreateView(QWidget):
         container_layout.addWidget(splitter)
         self.setLayout(container_layout)
     
+    def show_table(self):
+        table = TableWidget(
+            session_factory=self.Session, 
+            db_model=EndorsementCombinedView, 
+            view_type="endorsement-create", 
+            parent=self,
+        )
+        table.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+
+        return table
+        
     # OLD CODE
     # def validate_lot_quantity(self):
     #     """Real-time validation of lot quantity proportion"""
@@ -359,8 +370,7 @@ class EndorsementCreateView(QWidget):
         error_label = self.form_fields["t_qtykg_error"]
         error_label.setText(message)
 
-        if is_warning:
-            
+        if is_warning: 
             self.t_qtykg_input.setStyleSheet("""
                 border: 1px solid #FFA500;
                 background-color: #FFFFE0;
@@ -382,7 +392,6 @@ class EndorsementCreateView(QWidget):
             
     def refresh_table(self):
         """Refresh table data."""
-        # self.table_widget.load_data()
         try:
             # Store current scroll position
             scroll_pos = self.table_widget.table.verticalScrollBar().value()
@@ -400,7 +409,6 @@ class EndorsementCreateView(QWidget):
             
             # Ensure last column stretches
             self.table_widget.table.horizontalHeader().setStretchLastSection(True)
-        
         except Exception as e:
             print(f"Error refreshing table: {e}")
         
@@ -566,11 +574,14 @@ class EndorsementCreateView(QWidget):
         create_input_row: Callable[[str, Union[QWidget, QLineEdit], str, str], None]
     ):
         self.t_status_input = QComboBox()
+        self.t_status_input.setObjectName("endorsement-create-status-input")
 
         for status in StatusEnum:
             self.t_status_input.addItem(status.value, status)
 
         self.t_status_input.setCurrentText(StatusEnum.PASSED.value)
+        # disable the status so that the user cannot change the combox box value
+        self.t_status_input.setDisabled(True)
         create_input_row("Status:", self.t_status_input, "t_status", "t_status_error")
 
     def create_endorsed_by_input_row(
@@ -779,6 +790,7 @@ class EndorsementCreateView(QWidget):
         
         # Reset status
         self.t_status_input.setCurrentText(StatusEnum.PASSED.value)
+        self.t_status_input.setDisabled(True)
         
         # Clear endorsed by
         self.t_endorsed_by_input.clearEditText()
@@ -833,7 +845,7 @@ class EndorsementListView(QWidget):
     def show_table(self):
         table = TableWidget(
             session_factory=self.Session,
-            db_model=EndorsementModel,
+            db_model=EndorsementCombinedView,
             view_type="endorsement-list"
         )
         table.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)

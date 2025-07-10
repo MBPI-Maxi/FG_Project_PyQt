@@ -23,7 +23,7 @@ class EndorsementModel(Base):
     t_date_endorsed = Column(Date, nullable=False)
     t_category = Column(Enum(CategoryEnum), nullable=False, default=CategoryEnum.MB.value)
     t_prodcode = Column(String, nullable=False)
-    t_lotnumberwhole = Column(String, nullable=False)
+    t_lotnumberwhole = Column(String, nullable=False) # this should be unique
     t_qtykg = Column(Float, nullable=False)
     t_wtlot = Column(Float, nullable=False)
     t_status = Column(Enum(StatusEnum), nullable=False, default=StatusEnum.FAILED.value)
@@ -47,7 +47,8 @@ class EndorsementModelT2(Base):
 
     t_id = Column(Integer(), primary_key=True, autoincrement=True)
     t_refno = Column(String, ForeignKey("tbl_endorsement_t1.t_refno"), nullable=False)
-    t_lotnumbersingle = Column(String(10), nullable=False, unique=True)
+    # t_lotnumbersingle = Column(String(10), nullable=False, unique=True)
+    t_lotnumbersingle = Column(String(10), nullable=False)
     t_qty = Column(Float, nullable=False)
     # t_has_excess = Column(Boolean, default=False) just omit this because I already have a table for the excess items
     is_deleted = Column(Boolean, default=False)
@@ -64,18 +65,19 @@ class EndorsementModelT2(Base):
         cascade="all, delete-orphan"
     )
 
-    __table_args__ = (
-        UniqueConstraint("t_refno", "t_lotnumbersingle", name="uq_refno_lot"),
-    )
+    # __table_args__ = (
+    #     UniqueConstraint("t_refno", "t_lotnumbersingle", name="uq_refno_lot"),
+    # )
 
 
 class EndorsementLotExcessModel(Base):
     __tablename__ = "tbl_endorsement_lot_excess"
 
     t_id = Column(Integer, primary_key=True, autoincrement=True)
-    t_lotnumber = Column(
-        String(10),
-        ForeignKey("tbl_endorsement_t2.t_lotnumbersingle"),
+    tbl_endorsement_t2_ref = Column(
+        Integer,
+        # ForeignKey("tbl_endorsement_t2.t_lotnumbersingle"),
+        ForeignKey("tbl_endorsement_t2.t_id"),
         nullable=False,
         unique=True  # ensures one-to-one mapping
     )
@@ -88,3 +90,19 @@ class EndorsementLotExcessModel(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
     lot = relationship("EndorsementModelT2", back_populates="lot_excess")
+
+
+# A MODEL SPECIFIED TO THE PG ADMIN VIEW CALLED 'endorsement_combined'
+class EndorsementCombinedView(Base):
+    __tablename__ = "endorsement_combined"
+    __table_args__ = {"schema": "public"}
+    
+    # note that in the endorsement_combined table view the columns that were represented there should match here
+    t_refno = Column(String, primary_key=True)
+    t_lot_number = Column(String, primary_key=True)
+    t_total_quantity = Column(Float)
+    t_prodcode = Column(String)
+    t_status = Column(String)  # store enum as string/text
+    t_endorsed_by = Column(String)
+    t_category = Column(String)  # enum stored as string/text here
+    t_date_endorsed = Column(Date)
