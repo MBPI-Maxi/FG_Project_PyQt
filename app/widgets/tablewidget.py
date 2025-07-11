@@ -83,15 +83,17 @@ class TableWidget(QWidget):
         self.table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.table.customContextMenuRequested.connect(self.show_context_menu)
 
-        # CONFIGURE HEADERS
-        self.table.setColumnCount(8)
         # self.table.setHorizontalHeaderLabels()
 
         # IF ELSE STATEMENT HERE TO CHANGE THE COLUMN BASED ON CONDITION
         # if selfF.view_type and self.view_type == self.valid_views_to_show_export_btn[0]:
 
         if self.view_type and self.view_type.startswith("endorsement"):
-            self.table.setHorizontalHeaderLabels(TableHeader.get_header("endorsement"))
+            header_labels = TableHeader.get_header("endorsement")
+            
+            # CONFIGURE HEADERS (make this dynamic based on the )
+            self.table.setColumnCount(len(header_labels))
+            self.table.setHorizontalHeaderLabels(header_labels)
 
         self.table.horizontalHeader().setStretchLastSection(True)
 
@@ -131,11 +133,16 @@ class TableWidget(QWidget):
         self.items_per_page_combo.currentIndexChanged.connect(self.update_items_per_page)
         self.items_per_page_combo.setObjectName("table-widget-items-per-page-combo")
 
+        # refresh button
+        self.refresh_btn = QPushButton("Refresh")
+        self.refresh_btn.clicked.connect(self.reload_table)
+
         self.items_per_page_label = QLabel("Items per page:")
         self.items_per_page_label.setObjectName("table-widget-items-per-page-label")
 
         self.pagination_layout.addWidget(self.items_per_page_label)
         self.pagination_layout.addWidget(self.items_per_page_combo)
+        self.pagination_layout.addWidget(self.refresh_btn)
         self.pagination_layout.addStretch()
         self.pagination_layout.addWidget(self.prev_btn)
         self.pagination_layout.addWidget(self.page_label)
@@ -148,6 +155,9 @@ class TableWidget(QWidget):
         btn_container.addStretch()
         self.layout.addLayout(btn_container)
         self.export_btn.clicked.connect(self.export_to_excel)
+
+    def reload_table(self):
+        self.load_data()
 
     def apply_styles(self):
         qss_path = os.path.join(os.path.dirname(__file__), "styles", "table.css")
@@ -247,110 +257,53 @@ class TableWidget(QWidget):
                 f"Export failed: {str(e)}"
             )
 
-    # def load_data(self):
-    #     """Load data from the database with pagination."""
-    #     try:
-    #         session = self.Session()
-    #         endorsement_model = self.db_model
-    #         # Get total count for pagination calculation
-    #         total_items = session.query(endorsement_model).count()
-    #         self.total_pages = (total_items + self.items_per_page - 1) // self.items_per_page
-
-    #         # Calculate offset and limit for the current page
-    #         offset = (self.current_page - 1) * self.items_per_page
-    #         limit = self.items_per_page
-
-    #         # ADD A JOIN CLAUSE HERE SO THAT DATA FROM THE TABLE ENDORSEMENT 1
-    #         if endorsement_model.__tablename__ == "tbl_endorsement_t1":
-    #             endorsement_t2 = self.supplement_model.get("endorsement_t2", None)
-                
-    #             if endorsement_t2 is not None:
-    #                 # endorsements = session.query(
-    #                 #     endorsement_model,
-    #                 #     endorsement_t2
-    #                 # ).join(
-    #                 #     endorsement_t2,
-    #                 #     endorsement_model.t_refno == endorsement_t2.t_refno
-    #                 # ).order_by(
-    #                 #     endorsement_model.t_date_endorsed.desc(), 
-    #                 #     endorsement_model.t_refno.desc()
-    #                 # ).offset(offset).limit(limit).all()
-
-    #                 # for row, (t1_endorsement, t2_endorsement) in enumerate(endorsements):
-    #                 #     # for each entry on the endorsement model the rows are being populated.
-    #                 #     self._set_table_item(row, 0, t1_endorsement.t_refno)
-    #                 #     self._set_table_item(row, 1, t1_endorsement.t_date_endorsed.strftime("%Y-%m-%d"))
-    #                 #     self._set_table_item(row, 2, t1_endorsement.t_category.value)
-    #                 #     self._set_table_item(row, 3, t1_endorsement.t_prodcode)
-    #                 #     self._set_table_item(row, 4, t1_endorsement.t_lotnumberwhole)
-    #                 #     self._set_table_item(row, 5, f"{t1_endorsement.t_qtykg:.2f}")
-    #                 #     self._set_table_item(row, 6, t1_endorsement.t_status.value)
-    #                 #     self._set_table_item(row, 7, t1_endorsement.t_endorsed_by)
-
-    #                 endorsements = session.query(
-    #                     endorsement_model,
-    #                 ).order_by(
-    #                     endorsement_model.t_date_endorsed.desc(), 
-    #                     endorsement_model.t_refno.desc()
-    #                 ).offset(offset).limit(limit).all()
-
-    #                 self.table.setRowCount(len(endorsements))
-
-    #                 for row, endorsement in enumerate(endorsements):
-    #                     self._set_table_item(row, 0, endorsement.t_refno)
-    #                     self._set_table_item(row, 1, endorsement.t_date_endorsed.strftime("%Y-%m-%d"))
-    #                     self._set_table_item(row, 2, endorsement.t_category.value)
-    #                     self._set_table_item(row, 3, endorsement.t_prodcode)
-    #                     self._set_table_item(row, 4, endorsement.t_lotnumberwhole)
-    #                     self._set_table_item(row, 5, f"{endorsement.t_qtykg:.2f}")
-    #                     self._set_table_item(row, 6, endorsement.t_status.value)
-    #                     self._set_table_item(row, 7, endorsement.t_endorsed_by)
-
-    #                 self.table.verticalHeader().setDefaultSectionSize(24)
-    #                 self.table.verticalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Fixed)
-    #                 self.table.resizeColumnsToContents()
-
-    #                 self.update_pagination_controls() # Update button states and label
-    #             else:
-    #                 raise KeyError("Supplement model 'endorsement_t2' is required but not provided")
-    #     finally:
-    #         session.close()
-
     def load_data(self):
         """Load data from the endorsement_combined view with pagination."""
         try:
             session = self.Session()
             model = self.db_model
 
+            # Debug: Verify total count
             total_items = session.query(model).count()
-            self.total_pages = (total_items + self.items_per_page - 1) // self.items_per_page
+            print(f"Total items in view: {total_items}")  # Should match pgAdmin
+            
+            self.total_pages = max(1, (total_items + self.items_per_page - 1) // self.items_per_page)
+            print(f"Total pages: {self.total_pages}")
 
             offset = (self.current_page - 1) * self.items_per_page
             limit = self.items_per_page
+            print(f"Loading page {self.current_page} (offset {offset}, limit {limit})")
 
             if model.__tablename__ == "endorsement_combined":
-                endorsement_combined = session.query(model).offset(offset).limit(limit).all()
+                # Get fresh results with explicit ordering
+                results = session.query(model)\
+                    .order_by(model.t_lot_number.asc())\
+                    .offset(offset).limit(limit).all()
 
-                self.table.setRowCount(len(endorsement_combined))
+                # Debug: Print all fetched records
+                print(f"Fetched {len(results)} records:")
+                for i, r in enumerate(results):
+                    print(f"{i}: {r.t_refno} | {r.t_lot_number} | {r.t_total_quantity}")
 
-                for row_idx, endorsement in enumerate(endorsement_combined):
-                    self._set_table_item(row_idx, 0, endorsement.t_refno)
-                    self._set_table_item(row_idx, 0, endorsement.t_date_endorsed.strftime("%Y-%m-%d"))
-                    self._set_table_item(row_idx, 2, endorsement.t_category)
-                    self._set_table_item(row_idx, 3, endorsement.t_prodcode)
-                    self._set_table_item(row_idx, 4, endorsement.t_lot_number)
-                    self._set_table_item(row_idx, 5, f"{endorsement.t_total_quantity:.2f}")
-                    self._set_table_item(row_idx, 6, endorsement.t_status)
-                    self._set_table_item(row_idx, 7, endorsement.t_endorsed_by)
-
-                self.table.verticalHeader().setDefaultSectionSize(24)
-                self.table.verticalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Fixed)
-                self.table.resizeColumnsToContents()
+                self.table.setRowCount(len(results))
+                
+                # Correct column mapping (0-7)
+                for row_idx, record in enumerate(results):
+                    self._set_table_item(row_idx, 0, record.t_refno)
+                    self._set_table_item(row_idx, 1, record.t_date_endorsed.strftime("%Y-%m-%d"))  # Fixed column index
+                    self._set_table_item(row_idx, 2, record.t_category)
+                    self._set_table_item(row_idx, 3, record.t_prodcode)
+                    self._set_table_item(row_idx, 4, record.t_lot_number)
+                    self._set_table_item(row_idx, 5, f"{float(record.t_total_quantity):.2f}")
+                    self._set_table_item(row_idx, 6, record.t_status)
+                    self._set_table_item(row_idx, 7, record.t_endorsed_by)
+                    self._set_table_item(row_idx, 8, record.t_source_table)
+                    self._set_table_item(row_idx, 9, record.t_has_excess)
 
                 self.update_pagination_controls()
-            else:
-
-                print("Add an error statement here if this class is used that the ")
+        except Exception as e:
+            print(f"Error loading data: {str(e)}")
+            raise
         finally:
             session.close()
 

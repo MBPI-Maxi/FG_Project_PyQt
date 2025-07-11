@@ -9,11 +9,13 @@ from sqlalchemy import (
     Float, 
     func,
     ForeignKey,
-    UniqueConstraint
+    BigInteger,
+    # UniqueConstraint
 )
 from constants.Enums import CategoryEnum, StatusEnum
 from models import Base
 from sqlalchemy.orm import relationship
+import hashlib
 
 class EndorsementModel(Base):
     __tablename__ = "tbl_endorsement_t1"
@@ -91,18 +93,19 @@ class EndorsementLotExcessModel(Base):
 
     lot = relationship("EndorsementModelT2", back_populates="lot_excess")
 
-
-# A MODEL SPECIFIED TO THE PG ADMIN VIEW CALLED 'endorsement_combined'
 class EndorsementCombinedView(Base):
     __tablename__ = "endorsement_combined"
     __table_args__ = {"schema": "public"}
-    
-    # note that in the endorsement_combined table view the columns that were represented there should match here
-    t_refno = Column(String, primary_key=True)
-    t_lot_number = Column(String, primary_key=True)
+
+    id = Column(Integer, primary_key=True)  # <- synthetic primary key
+    t_refno = Column(String)
+    t_lot_number = Column(String)
+    t_date_endorsed = Column(Date)
     t_total_quantity = Column(Float)
     t_prodcode = Column(String)
-    t_status = Column(String)  # store enum as string/text
+    t_status = Column(String)
     t_endorsed_by = Column(String)
-    t_category = Column(String)  # enum stored as string/text here
-    t_date_endorsed = Column(Date)
+    t_category = Column(String)
+    t_has_excess = Column(Boolean)
+    t_source_table = Column(String)
+    

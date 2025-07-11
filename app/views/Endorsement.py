@@ -229,7 +229,7 @@ class EndorsementCreateView(QWidget):
 
         return table
         
-    # OLD CODE
+    # OLD CODE (original)
     # def validate_lot_quantity(self):
     #     """Real-time validation of lot quantity proportion"""
     #     try:
@@ -287,8 +287,80 @@ class EndorsementCreateView(QWidget):
     #     except Exception as e:
     #         print(f"Validation error: {e}")
 
+    # def validate_lot_quantity(self):
+    #     """Real-time validation of lot quantity proportion (shows warnings instead of errors)"""
+    #     try:
+    #         lot_text = self.t_lotnumberwhole_input.text()
+    #         qty = self.t_qtykg_input.value()
+    #         wtlot = self.t_wtlot_input.value()
+    #         has_excess = self.has_excess_checkbox.isChecked()
+            
+    #         # Clear any existing messages if fields are empty
+    #         if not lot_text or wtlot <= 0:
+    #             self.form_fields["t_qtykg_error"].setText("")
+    #             self.t_qtykg_input.setStyleSheet("")
+    #             return
+                
+    #         if "-" in lot_text:
+    #             try:
+    #                 start, end = lot_text.split("-")
+    #                 start_num = int(start[:4])
+    #                 end_num = int(end[:4])
+    #                 num_lots = (end_num - start_num) + 1
+    #                 expected_full = num_lots * wtlot
+                    
+    #                 if has_excess:
+    #                     if qty < (expected_full - wtlot):
+    #                         self.show_quantity_message(
+    #                             f"⚠️ Warning: Quantity seems low for this lot range (expected ~{expected_full})",
+    #                             is_warning=True
+    #                         )
+    #                         return
+    #                     elif qty > expected_full and not math.isclose(qty % wtlot, 0, abs_tol=1e-5):
+    #                         self.show_quantity_message(
+    #                             "⚠️ Note: Excess should be less than one full lot",
+    #                             is_warning=True
+    #                         )
+    #                         return
+    #                 else:
+    #                     if not math.isclose(qty, expected_full, rel_tol=1e-5, abs_tol=1e-5):
+    #                         self.show_quantity_message(
+    #                             f"💡 Tip: Quantity doesn't match exact lots (expected {expected_full}). "
+    #                             "Consider checking 'has excess' if appropriate",
+    #                             is_warning=True
+    #                         )
+    #                         return
+                            
+    #                 # Clear message if validation passes
+    #                 self.form_fields["t_qtykg_error"].setText("")
+    #                 self.t_qtykg_input.setStyleSheet("")
+    #                 return
+                    
+    #             except (ValueError, IndexError):
+    #                 # Invalid lot format - will be caught by other validators
+    #                 self.show_quantity_message("Invalid lot number format", is_warning=True)
+    #                 return
+    #         else:
+    #             # Single lot
+    #             if not has_excess and not math.isclose(qty, wtlot, rel_tol=1e-5, abs_tol=1e-5):
+    #                 self.show_quantity_message(
+    #                     f"💡 Tip: For single lot, quantity usually matches weight per lot ({wtlot}). "
+    #                     "Check 'has excess' if this is intentional",
+    #                     is_warning=True
+    #                 )
+    #                 return
+                    
+    #             # Clear message if validation passes
+    #             self.form_fields["t_qtykg_error"].setText("")
+    #             self.t_qtykg_input.setStyleSheet("")
+    #             return
+                
+    #     except Exception as e:
+    #         print(f"Validation warning: {e}")
+    #         return
+
     def validate_lot_quantity(self):
-        """Real-time validation of lot quantity proportion (shows warnings instead of errors)"""
+        """Real-time validation of lot quantity proportion with strict excess checking"""
         try:
             lot_text = self.t_lotnumberwhole_input.text()
             qty = self.t_qtykg_input.value()
@@ -297,8 +369,7 @@ class EndorsementCreateView(QWidget):
             
             # Clear any existing messages if fields are empty
             if not lot_text or wtlot <= 0:
-                self.form_fields["t_qtykg_error"].setText("")
-                self.t_qtykg_input.setStyleSheet("")
+                self.clear_quantity_error()
                 return
                 
             if "-" in lot_text:
@@ -309,86 +380,125 @@ class EndorsementCreateView(QWidget):
                     num_lots = (end_num - start_num) + 1
                     expected_full = num_lots * wtlot
                     
-                    if has_excess:
-                        if qty < (expected_full - wtlot):
-                            self.show_quantity_message(
-                                f"⚠️ Warning: Quantity seems low for this lot range (expected ~{expected_full})",
-                                is_warning=True
+                    # --- New strict validation ---
+                    if not math.isclose(qty, expected_full, rel_tol=1e-5, abs_tol=1e-5):
+                        if not has_excess:
+                            self.show_quantity_error(
+                                f"Quantity doesn't match exact lots (expected {expected_full}). "
+                                "You MUST check 'has excess' for partial lots",
+                                require_excess=True
                             )
                             return
-                        elif qty > expected_full and not math.isclose(qty % wtlot, 0, abs_tol=1e-5):
-                            self.show_quantity_message(
-                                "⚠️ Note: Excess should be less than one full lot",
-                                is_warning=True
+                        elif qty > expected_full:
+                            self.show_quantity_error(
+                                "Excess quantity cannot exceed one full lot",
+                                require_excess=True
                             )
                             return
                     else:
-                        if not math.isclose(qty, expected_full, rel_tol=1e-5, abs_tol=1e-5):
-                            self.show_quantity_message(
-                                f"💡 Tip: Quantity doesn't match exact lots (expected {expected_full}). "
-                                "Consider checking 'has excess' if appropriate",
-                                is_warning=True
+                        if has_excess:
+                            self.show_quantity_error(
+                                "Uncheck 'has excess' since quantity matches exact lots",
+                                require_excess=True
                             )
                             return
                             
-                    # Clear message if validation passes
-                    self.form_fields["t_qtykg_error"].setText("")
-                    self.t_qtykg_input.setStyleSheet("")
-                    return
-                    
                 except (ValueError, IndexError):
-                    # Invalid lot format - will be caught by other validators
-                    self.show_quantity_message("Invalid lot number format", is_warning=True)
+                    self.show_quantity_error("Invalid lot number format")
                     return
             else:
-                # Single lot
-                if not has_excess and not math.isclose(qty, wtlot, rel_tol=1e-5, abs_tol=1e-5):
-                    self.show_quantity_message(
-                        f"💡 Tip: For single lot, quantity usually matches weight per lot ({wtlot}). "
-                        "Check 'has excess' if this is intentional",
-                        is_warning=True
-                    )
-                    return
-                    
-                # Clear message if validation passes
-                self.form_fields["t_qtykg_error"].setText("")
-                self.t_qtykg_input.setStyleSheet("")
-                return
-                
+                # Single lot validation
+                if not math.isclose(qty, wtlot, rel_tol=1e-5, abs_tol=1e-5):
+                    if not has_excess:
+                        self.show_quantity_error(
+                            f"Quantity should match weight per lot ({wtlot}). "
+                            "You MUST check 'has excess' for partial quantities",
+                            require_excess=True
+                        )
+                        return
+                else:
+                    if has_excess:
+                        self.show_quantity_error(
+                            "Uncheck 'has excess' since quantity matches weight per lot",
+                            require_excess=True
+                        )
+                        return
+            
+            # Clear messages if validation passes
+            self.clear_quantity_error()
+            
         except Exception as e:
-            print(f"Validation warning: {e}")
+            print(f"Validation error: {e}")
             return
 
-    # OLD CODE
+    # OLD CODE (original)
     # def show_quantity_error(self, message):
     #     """Helper to display quantity validation error"""
     #     self.form_fields["t_qtykg_error"].setText(message)
     #     self.t_qtykg_input.setStyleSheet("border: 1px solid red;")
     
-    def show_quantity_message(self, message, is_warning=False):
-        """Helper to display quantity validation message (warning or error)"""
+    # V2 OLD CODE
+    # def show_quantity_message(self, message, is_warning=False):
+    #     """Helper to display quantity validation message (warning or error)"""
+    #     error_label = self.form_fields["t_qtykg_error"]
+    #     error_label.setText(message)
+
+    #     if is_warning: 
+    #         self.t_qtykg_input.setStyleSheet("""
+    #             border: 1px solid #FFA500;
+    #             background-color: #FFFFE0;
+    #         """
+    #         )
+    #         error_label.setStyleSheet("""
+    #             color: #FF8C00;
+    #             font-style: italic;
+    #             margin-left: 5px;
+    #         """)        
+    #     else:
+    #         self.t_qtykg_input.setStyleSheet("""
+    #             border: 1px solid red;    
+    #         """)
+    #         error_label.setStyleSheet("""
+    #             color: red;
+    #             font-style: italic;
+    #         """)
+
+    def show_quantity_error(self, message, require_excess=False):
+        """Helper to display quantity validation error"""
         error_label = self.form_fields["t_qtykg_error"]
         error_label.setText(message)
-
-        if is_warning: 
-            self.t_qtykg_input.setStyleSheet("""
-                border: 1px solid #FFA500;
-                background-color: #FFFFE0;
-            """
-            )
-            error_label.setStyleSheet("""
-                color: #FF8C00;
-                font-style: italic;
-                margin-left: 5px;
-            """)        
+        
+        # Style the quantity input
+        self.t_qtykg_input.setStyleSheet("""
+            border: 1px solid red;
+            background-color: #FFE0E0;
+        """)
+        
+        # Style the error label
+        error_label.setStyleSheet("""
+            color: red;
+            font-weight: bold;
+            margin-left: 5px;
+        """)
+        
+        # Highlight the excess checkbox if required
+        if require_excess:
+            self.has_excess_checkbox.setStyleSheet("""
+                QCheckBox {
+                    color: red;
+                }
+                QCheckBox::indicator {
+                    border: 1px solid red;
+                }
+            """)
         else:
-            self.t_qtykg_input.setStyleSheet("""
-                border: 1px solid red;    
-            """)
-            error_label.setStyleSheet("""
-                color: red;
-                font-style: italic;
-            """)
+            self.has_excess_checkbox.setStyleSheet("")
+
+    def clear_quantity_error(self):
+        """Clear all quantity validation styling"""
+        self.form_fields["t_qtykg_error"].setText("")
+        self.t_qtykg_input.setStyleSheet("")
+        self.has_excess_checkbox.setStyleSheet("")
             
     def refresh_table(self):
         """Refresh table data."""
@@ -748,7 +858,6 @@ class EndorsementCreateView(QWidget):
                 "Error",
                 f"An unexpected error occurred: {e}"
             )
-        
         else:
             StyledMessageBox.information(
                 self,

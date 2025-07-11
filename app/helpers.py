@@ -83,6 +83,104 @@ def parse_lot_range(lot_range: str):
     return start_num, end_num, start_suffix
 
 
+# def populate_endorsement_items(
+#     endorsement_model: Type[DeclarativeMeta],
+#     endorsement_model_t2: Type[DeclarativeMeta],
+#     endorsement_lot_excess_model: Type[DeclarativeMeta],
+#     validated_data,
+#     category,
+#     has_excess,
+# ):
+#     t2_items = []
+#     excess_items = []
+
+#     validated_lot_number = validated_data.t_lotnumberwhole
+#     validated_qtykg = validated_data.t_qtykg
+#     validated_wtlot = validated_data.t_wtlot
+
+#     if "-" in validated_lot_number:
+#         # Your existing range logic remains the same
+#         start_num, end_num, suffix = parse_lot_range(validated_lot_number)
+#         remaining_qty = validated_qtykg
+
+#         for number in range(start_num, end_num + 1):
+#             lot_code = f"{str(number).zfill(4)}{suffix}"
+
+#             if has_excess and category == CategoryEnum.MB.value:
+#                 if remaining_qty >= validated_wtlot:
+#                     t2_items.append(
+#                         endorsement_model_t2(
+#                             t_refno=validated_data.t_refno,
+#                             t_lotnumbersingle=lot_code,
+#                             t_qty=validated_wtlot
+#                         )
+#                     )
+#                     remaining_qty -= validated_wtlot
+#                 else:
+#                     if remaining_qty > 0:
+#                         t2_items.append(
+#                             endorsement_model_t2(
+#                                 t_refno=validated_data.t_refno,
+#                                 t_lotnumbersingle=lot_code,
+#                                 t_qty=round(remaining_qty, 2),
+#                                 lot_excess=endorsement_lot_excess_model(
+#                                     tbl_endorsement_t2_ref=lot_code,
+#                                     t_excess_amount=round(remaining_qty, 2)
+#                                 )
+#                             )
+#                         )
+#                         remaining_qty = 0
+#                     break
+#             else:
+#                 t2_items.append(
+#                     endorsement_model_t2(
+#                         t_refno=validated_data.t_refno,
+#                         t_lotnumbersingle=lot_code,
+#                         t_qty=validated_wtlot
+#                     )
+#                 )
+#     else:
+#         # Single lot entry - Modified logic
+#         if has_excess and category == CategoryEnum.MB.value:
+#             full_lots = int(validated_qtykg // validated_wtlot)
+#             excess = round(validated_qtykg % validated_wtlot, 2)
+
+#             # Add full lots (25kg each)
+#             for _ in range(full_lots):
+#                 t2_items.append(
+#                     endorsement_model_t2(
+#                         t_refno=validated_data.t_refno,
+#                         t_lotnumbersingle=validated_lot_number,
+#                         t_qty=validated_wtlot
+#                     )
+#                 )
+
+#             # Add excess as a separate entry if it exists
+#             if excess > 0:
+#                 t2_items.append(
+#                     endorsement_model_t2(
+#                         t_refno=validated_data.t_refno,
+#                         t_lotnumbersingle=validated_lot_number,
+#                         t_qty=excess,
+#                         lot_excess=endorsement_lot_excess_model(
+#                             t_lotnumber=validated_lot_number,
+#                             t_excess_amount=excess
+#                         )
+#                     )
+#                 )
+#         else:
+#             # No excess logic, just add normally
+#             t2_items.append(
+#                 endorsement_model_t2(
+#                     t_refno=validated_data.t_refno,
+#                     t_lotnumbersingle=validated_lot_number,
+#                     t_qty=validated_qtykg
+#                 )
+#             )
+
+#     # Attach to parent model
+#     endorsement_model.endorsement_t2_items = t2_items
+
 def populate_endorsement_items(
     endorsement_model: Type[DeclarativeMeta],
     endorsement_model_t2: Type[DeclarativeMeta],
@@ -99,7 +197,6 @@ def populate_endorsement_items(
     validated_wtlot = validated_data.t_wtlot
 
     if "-" in validated_lot_number:
-        # Your existing range logic remains the same
         start_num, end_num, suffix = parse_lot_range(validated_lot_number)
         remaining_qty = validated_qtykg
 
@@ -118,17 +215,23 @@ def populate_endorsement_items(
                     remaining_qty -= validated_wtlot
                 else:
                     if remaining_qty > 0:
-                        t2_items.append(
-                            endorsement_model_t2(
-                                t_refno=validated_data.t_refno,
-                                t_lotnumbersingle=lot_code,
-                                t_qty=round(remaining_qty, 2),
-                                lot_excess=endorsement_lot_excess_model(
-                                    t_lotnumber=lot_code,
-                                    t_excess_amount=round(remaining_qty, 2)
-                                )
-                            )
+                        # Create the T2 item first
+                        excess_t2_item = endorsement_model_t2(
+                            t_refno=validated_data.t_refno,
+                            t_lotnumbersingle=lot_code,
+                            t_qty=round(remaining_qty, 2)
                         )
+                        
+                        # Then create the excess item linked to it
+                        excess_item = endorsement_lot_excess_model(
+                            tbl_endorsement_t2_ref=excess_t2_item,  # This will set the relationship
+                            t_excess_amount=round(remaining_qty, 2)
+                        )
+                        
+                        # Set the relationship
+                        excess_t2_item.lot_excess = excess_item
+                        
+                        t2_items.append(excess_t2_item)
                         remaining_qty = 0
                     break
             else:
@@ -140,7 +243,7 @@ def populate_endorsement_items(
                     )
                 )
     else:
-        # Single lot entry - Modified logic
+        # Single lot entry
         if has_excess and category == CategoryEnum.MB.value:
             full_lots = int(validated_qtykg // validated_wtlot)
             excess = round(validated_qtykg % validated_wtlot, 2)
@@ -157,17 +260,23 @@ def populate_endorsement_items(
 
             # Add excess as a separate entry if it exists
             if excess > 0:
-                t2_items.append(
-                    endorsement_model_t2(
-                        t_refno=validated_data.t_refno,
-                        t_lotnumbersingle=validated_lot_number,
-                        t_qty=excess,
-                        lot_excess=endorsement_lot_excess_model(
-                            t_lotnumber=validated_lot_number,
-                            t_excess_amount=excess
-                        )
-                    )
+                # Create the excess T2 item
+                excess_t2_item = endorsement_model_t2(
+                    t_refno=validated_data.t_refno,
+                    t_lotnumbersingle=validated_lot_number,
+                    t_qty=excess
                 )
+                
+                # Create and link the excess record
+                excess_item = endorsement_lot_excess_model(
+                    tbl_endorsement_t2_ref=excess_t2_item,  # This sets the relationship
+                    t_excess_amount=excess
+                )
+                
+                # Set the relationship
+                excess_t2_item.lot_excess = excess_item
+                
+                t2_items.append(excess_t2_item)
         else:
             # No excess logic, just add normally
             t2_items.append(
@@ -180,6 +289,7 @@ def populate_endorsement_items(
 
     # Attach to parent model
     endorsement_model.endorsement_t2_items = t2_items
+
 
 # def populate_endorsement_items(
 #     endorsement_model: Type[DeclarativeMeta],

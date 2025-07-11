@@ -56,7 +56,8 @@ class TableHeader():
         "endorsement": [
             "Ref No", "Date Endorse", "Category", 
             "Product Code", "Lot Number", 
-            "Qty (kg)", "Status", "Endorsed By"
+            "Qty (kg)", "Status", "Endorsed By", "Source Table",
+            "Has Excess"
         ]
     }
 
