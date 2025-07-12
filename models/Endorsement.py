@@ -15,7 +15,6 @@ from sqlalchemy import (
 from constants.Enums import CategoryEnum, StatusEnum
 from models import Base
 from sqlalchemy.orm import relationship
-import hashlib
 
 class EndorsementModel(Base):
     __tablename__ = "tbl_endorsement_t1"
@@ -49,7 +48,6 @@ class EndorsementModelT2(Base):
 
     t_id = Column(Integer(), primary_key=True, autoincrement=True)
     t_refno = Column(String, ForeignKey("tbl_endorsement_t1.t_refno"), nullable=False)
-    # t_lotnumbersingle = Column(String(10), nullable=False, unique=True)
     t_lotnumbersingle = Column(String(10), nullable=False)
     t_qty = Column(Float, nullable=False)
     # t_has_excess = Column(Boolean, default=False) just omit this because I already have a table for the excess items
@@ -93,6 +91,7 @@ class EndorsementLotExcessModel(Base):
 
     lot = relationship("EndorsementModelT2", back_populates="lot_excess")
 
+# ------  A SCHEMA FOR THE VIEW EXISTING ON THE DATABASE ------
 class EndorsementCombinedView(Base):
     __tablename__ = "endorsement_combined"
     __table_args__ = {"schema": "public"}

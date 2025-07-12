@@ -115,16 +115,6 @@ class EndorsementCreateView(QWidget):
         error_label_name: str
     ) -> None:
         ...
-    
-    @overload
-    def create_input_horizontal_layout(
-        self,
-        label_text: str,
-        widget: QDateEdit,
-        field_name: str,
-        error_label_name: str
-    ) -> None:
-        ...
 
     def init_ui(self):
         self.main_layout = QVBoxLayout()
@@ -179,17 +169,15 @@ class EndorsementCreateView(QWidget):
         self.create_prod_code_row(create_input_row)
         # 5. Whole Lot Number
         self.create_lot_number_row(create_input_row)
-        # 6. Weight per Lot
-        self.create_weight_per_lot_row(create_input_row)
-        # 7. Quantity (kg)
+        # 6. Quantity (kg)
         self.create_qtykg_row(create_input_row)
-        # 8 BAG NUMBER INPUT()
-        self.create_bag_input_row(create_input_row)
-        # 9. Status
+        # 7. Weight per Lot
+        self.create_weight_per_lot_row(create_input_row)
+        # 8. Status
         self.create_status_row(create_input_row)
-        # 10. Endorsed By
+        # 9. Endorsed By
         self.create_endorsed_by_input_row(create_input_row)
-        # 11. Remarks
+        # 8. Remarks
         self.create_remarks_input_row(create_input_row)
 
         # Spacer to push elements to the top
@@ -201,10 +189,10 @@ class EndorsementCreateView(QWidget):
         self.save_button.clicked.connect(self.save_endorsement)
 
         # --------------- test_btn ----------------------------
-        # self.test_btn = QPushButton("Click to test output")
-        # self.test_btn.clicked.connect(
-        #     lambda: print(self.t_category_input.currentText() == CategoryEnum.MB.value)
-        # )
+        self.test_btn = QPushButton("Click to test output")
+        self.test_btn.clicked.connect(
+            lambda: print(self.t_category_input.currentText() == CategoryEnum.MB.value)
+        )
 
         # ---------------- real-time connection -----------------------
         self.t_lotnumberwhole_input.textChanged.connect(self.validate_lot_quantity)
@@ -213,7 +201,7 @@ class EndorsementCreateView(QWidget):
         self.has_excess_checkbox.stateChanged.connect(self.validate_lot_quantity)
 
         self.main_layout.addWidget(self.save_button)
-        # self.main_layout.addWidget(self.test_btn)
+        self.main_layout.addWidget(self.test_btn)
         
         # form table
         splitter = QSplitter(Qt.Orientation.Vertical)
@@ -241,6 +229,136 @@ class EndorsementCreateView(QWidget):
 
         return table
         
+    # OLD CODE (original)
+    # def validate_lot_quantity(self):
+    #     """Real-time validation of lot quantity proportion"""
+    #     try:
+    #         lot_text = self.t_lotnumberwhole_input.text()
+    #         qty = self.t_qtykg_input.value()
+    #         wtlot = self.t_wtlot_input.value()
+    #         has_excess = self.has_excess_checkbox.isChecked()
+            
+    #         if not lot_text or wtlot <= 0:
+    #             return
+                
+    #         if "-" in lot_text:
+    #             try:
+    #                 start, end = lot_text.split("-")
+    #                 start_num = int(start[:4])
+    #                 end_num = int(end[:4])
+    #                 num_lots = (end_num - start_num) + 1
+    #                 expected_full = num_lots * wtlot
+                    
+    #                 if has_excess:
+    #                     if qty < (expected_full - wtlot):
+    #                         self.show_quantity_error(
+    #                             f"Quantity too small for lot range. Min: {expected_full - wtlot}"
+    #                         )
+    #                         return
+    #                 else:
+    #                     if not math.isclose(qty, expected_full, rel_tol=1e-5):
+    #                         self.show_quantity_error(
+    #                             f"Quantity should be exactly {expected_full} for this lot range"
+    #                         )
+    #                         return
+                            
+    #                 # Check if should have excess
+    #                 if not has_excess and not math.isclose(qty, expected_full, rel_tol=1e-5):
+    #                     self.show_quantity_error(
+    #                         f"Quantity suggests excess (expected {expected_full}). Check 'has excess'"
+    #                     )
+    #                     return
+                        
+    #             except (ValueError, IndexError):
+    #                 # Invalid lot format - will be caught by other validators
+    #                 return
+    #         else:
+    #             # Single lot
+    #             if not has_excess and not math.isclose(qty, wtlot, rel_tol=1e-5):
+    #                 self.show_quantity_error(
+    #                     f"Quantity should be exactly {wtlot} for single lot"
+    #                 )
+    #                 return
+                    
+    #         # Clear error if validation passed
+    #         self.form_fields["t_qtykg_error"].setText("")
+    #         self.t_qtykg_input.setStyleSheet("")
+            
+    #     except Exception as e:
+    #         print(f"Validation error: {e}")
+
+    # def validate_lot_quantity(self):
+    #     """Real-time validation of lot quantity proportion (shows warnings instead of errors)"""
+    #     try:
+    #         lot_text = self.t_lotnumberwhole_input.text()
+    #         qty = self.t_qtykg_input.value()
+    #         wtlot = self.t_wtlot_input.value()
+    #         has_excess = self.has_excess_checkbox.isChecked()
+            
+    #         # Clear any existing messages if fields are empty
+    #         if not lot_text or wtlot <= 0:
+    #             self.form_fields["t_qtykg_error"].setText("")
+    #             self.t_qtykg_input.setStyleSheet("")
+    #             return
+                
+    #         if "-" in lot_text:
+    #             try:
+    #                 start, end = lot_text.split("-")
+    #                 start_num = int(start[:4])
+    #                 end_num = int(end[:4])
+    #                 num_lots = (end_num - start_num) + 1
+    #                 expected_full = num_lots * wtlot
+                    
+    #                 if has_excess:
+    #                     if qty < (expected_full - wtlot):
+    #                         self.show_quantity_message(
+    #                             f"⚠️ Warning: Quantity seems low for this lot range (expected ~{expected_full})",
+    #                             is_warning=True
+    #                         )
+    #                         return
+    #                     elif qty > expected_full and not math.isclose(qty % wtlot, 0, abs_tol=1e-5):
+    #                         self.show_quantity_message(
+    #                             "⚠️ Note: Excess should be less than one full lot",
+    #                             is_warning=True
+    #                         )
+    #                         return
+    #                 else:
+    #                     if not math.isclose(qty, expected_full, rel_tol=1e-5, abs_tol=1e-5):
+    #                         self.show_quantity_message(
+    #                             f"💡 Tip: Quantity doesn't match exact lots (expected {expected_full}). "
+    #                             "Consider checking 'has excess' if appropriate",
+    #                             is_warning=True
+    #                         )
+    #                         return
+                            
+    #                 # Clear message if validation passes
+    #                 self.form_fields["t_qtykg_error"].setText("")
+    #                 self.t_qtykg_input.setStyleSheet("")
+    #                 return
+                    
+    #             except (ValueError, IndexError):
+    #                 # Invalid lot format - will be caught by other validators
+    #                 self.show_quantity_message("Invalid lot number format", is_warning=True)
+    #                 return
+    #         else:
+    #             # Single lot
+    #             if not has_excess and not math.isclose(qty, wtlot, rel_tol=1e-5, abs_tol=1e-5):
+    #                 self.show_quantity_message(
+    #                     f"💡 Tip: For single lot, quantity usually matches weight per lot ({wtlot}). "
+    #                     "Check 'has excess' if this is intentional",
+    #                     is_warning=True
+    #                 )
+    #                 return
+                    
+    #             # Clear message if validation passes
+    #             self.form_fields["t_qtykg_error"].setText("")
+    #             self.t_qtykg_input.setStyleSheet("")
+    #             return
+                
+    #     except Exception as e:
+    #         print(f"Validation warning: {e}")
+    #         return
+
     def validate_lot_quantity(self):
         """Real-time validation of lot quantity proportion with strict excess checking"""
         try:
@@ -313,6 +431,38 @@ class EndorsementCreateView(QWidget):
             print(f"Validation error: {e}")
             return
 
+    # OLD CODE (original)
+    # def show_quantity_error(self, message):
+    #     """Helper to display quantity validation error"""
+    #     self.form_fields["t_qtykg_error"].setText(message)
+    #     self.t_qtykg_input.setStyleSheet("border: 1px solid red;")
+    
+    # V2 OLD CODE
+    # def show_quantity_message(self, message, is_warning=False):
+    #     """Helper to display quantity validation message (warning or error)"""
+    #     error_label = self.form_fields["t_qtykg_error"]
+    #     error_label.setText(message)
+
+    #     if is_warning: 
+    #         self.t_qtykg_input.setStyleSheet("""
+    #             border: 1px solid #FFA500;
+    #             background-color: #FFFFE0;
+    #         """
+    #         )
+    #         error_label.setStyleSheet("""
+    #             color: #FF8C00;
+    #             font-style: italic;
+    #             margin-left: 5px;
+    #         """)        
+    #     else:
+    #         self.t_qtykg_input.setStyleSheet("""
+    #             border: 1px solid red;    
+    #         """)
+    #         error_label.setStyleSheet("""
+    #             color: red;
+    #             font-style: italic;
+    #         """)
+
     def show_quantity_error(self, message, require_excess=False):
         """Helper to display quantity validation error"""
         error_label = self.form_fields["t_qtykg_error"]
@@ -327,8 +477,7 @@ class EndorsementCreateView(QWidget):
         # Style the error label
         error_label.setStyleSheet("""
             color: red;
-            font-size: 12px;
-            font-style: italic;
+            font-weight: bold;
             margin-left: 5px;
         """)
         
@@ -376,7 +525,7 @@ class EndorsementCreateView(QWidget):
     def create_input_horizontal_layout(
         self, 
         label_text: str, 
-        widget: Union[QWidget, QLineEdit, QDateEdit], 
+        widget: Union[QWidget, QLineEdit], 
         field_name: str, 
         error_label_name: str
     ) -> None:
@@ -453,7 +602,7 @@ class EndorsementCreateView(QWidget):
         self.t_date_endorsed_input.setObjectName("endorsement-date-endorsed-input")
 
         create_input_row("Date Endorsed:", self.t_date_endorsed_input, "t_date_endorsed", "t_date_endorsed_error")
-
+    
     def create_t_refno_row(
         self, 
         create_input_row: Callable[[str, Union[QWidget, QLineEdit], str, str], None]
@@ -507,17 +656,6 @@ class EndorsementCreateView(QWidget):
 
         create_input_row("Product Code:", self.t_prodcode_input, "t_prodcode", "t_prodcode_error")
     
-    def create_weight_per_lot_row(
-        self, 
-        create_input_row: Callable[[str, Union[QWidget, QLineEdit], str, str], None]
-    ):
-        self.t_wtlot_input = QDoubleSpinBox()
-        self.t_wtlot_input.setMinimum(0.01) # Pydantic gt=0, so min here can be slightly above 0
-        self.t_wtlot_input.setMaximum(999999999.99)
-        self.t_wtlot_input.setDecimals(2)
-
-        create_input_row("Weight per Lot:", self.t_wtlot_input, "t_wtlot", "t_wtlot_error")
-
     def create_qtykg_row(
         self, 
         create_input_row: Callable[[str, Union[QWidget, QLineEdit], str, str], None]
@@ -529,13 +667,17 @@ class EndorsementCreateView(QWidget):
         self.t_qtykg_input.setDecimals(2)
 
         create_input_row("Quantity (kg):", self.t_qtykg_input, "t_qtykg", "t_qtykg_error")
-    
-    def create_bag_input_row(
-        self,
+            
+    def create_weight_per_lot_row(
+        self, 
         create_input_row: Callable[[str, Union[QWidget, QLineEdit], str, str], None]
     ):
-        self.t_bag_num_input = QLineEdit()
-        create_input_row("Bag number:", self.t_bag_num_input, "t_bag_num", "t_bag_num_error")
+        self.t_wtlot_input = QDoubleSpinBox()
+        self.t_wtlot_input.setMinimum(0.01) # Pydantic gt=0, so min here can be slightly above 0
+        self.t_wtlot_input.setMaximum(999999999.99)
+        self.t_wtlot_input.setDecimals(2)
+
+        create_input_row("Weight per Lot:", self.t_wtlot_input, "t_wtlot", "t_wtlot_error")
 
     def create_status_row(
         self, 
@@ -677,29 +819,6 @@ class EndorsementCreateView(QWidget):
 
             # Validate the data using your Pydantic schema
             validated_data = EndorsementFormSchema(**form_data)
-            
-            # --------------------------------------------------------------------------
-            # before passing the validated form in the endorsement model check first if the data is already existing on the database
-            
-            is_lot_existing = session.query(EndorsementModel).filter(
-                EndorsementModel.t_lotnumberwhole == validated_data.t_lotnumberwhole
-            ).first()
-
-            if is_lot_existing:
-                print(True)
-                # prompt the user that an item is already existing on the database.
-                # enforce the user to just only change weight per lot 
-
-                # CREATE A FUNCTION HERE THAT OMITS THE WHOLE ENTRY AND JUST UPDATE THE t_qtykg on the endorsement table 1
-
-                
-
-            else:
-                print(False)
-
-
-        
-            # --------------------------------------------------------------------------
 
             # print(validated_data.model_dump_json(indent=2)) 
             # if the form is valid store this in the database.
@@ -755,10 +874,7 @@ class EndorsementCreateView(QWidget):
             self.refresh_table()
         finally:
             session.close()
-
-    def show_lot_exists_warning(self):
-        pass
-
+ 
     def clear_form(self):
         """Resets the input fields to their initial state."""
         # Clear reference number

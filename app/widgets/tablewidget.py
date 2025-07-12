@@ -89,11 +89,11 @@ class TableWidget(QWidget):
         # if selfF.view_type and self.view_type == self.valid_views_to_show_export_btn[0]:
 
         if self.view_type and self.view_type.startswith("endorsement"):
-            header_labels = TableHeader.get_header("endorsement")
+            self.header_labels = TableHeader.get_header("endorsement")
             
             # CONFIGURE HEADERS (make this dynamic based on the )
-            self.table.setColumnCount(len(header_labels))
-            self.table.setHorizontalHeaderLabels(header_labels)
+            self.table.setColumnCount(len(self.header_labels))
+            self.table.setHorizontalHeaderLabels(self.header_labels)
 
         self.table.horizontalHeader().setStretchLastSection(True)
 
@@ -183,31 +183,11 @@ class TableWidget(QWidget):
         self.table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
         self.table.setFocusPolicy(Qt.FocusPolicy.NoFocus)
 
-        # You correctly commented this out, which is essential for scrollbar to appear
-        # self.table.horizontalHeader().setStretchLastSection(True)
-
         # Set column widths (adjust as needed)
-        self.table.setColumnWidth(0, 100)  # Ref No
-        self.table.setColumnWidth(1, 100)  # Date
-        self.table.setColumnWidth(2, 100)  # Category
-        self.table.setColumnWidth(3, 150)  # Product Code
-        self.table.setColumnWidth(4, 150)  # Lot Number
-        self.table.setColumnWidth(5, 80)   # Qty (kg)
-        self.table.setColumnWidth(6, 80)   # Status
-        # Don't forget the 8th column (index 7) from your header labels
-        self.table.setColumnWidth(7, 120)  # Endorsed By - Give it an initial width
-
-        # Add these lines to explicitly set resize mode for each column.
-        # If you want them to cause a scrollbar when exceeding width,
-        # use Interactive or Fixed.
-        self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Interactive)
-        self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Interactive)
-        self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Interactive)
-        self.table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.Interactive)
-        self.table.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeMode.Interactive)
-        self.table.horizontalHeader().setSectionResizeMode(5, QHeaderView.ResizeMode.Interactive)
-        self.table.horizontalHeader().setSectionResizeMode(6, QHeaderView.ResizeMode.Interactive)
-        self.table.horizontalHeader().setSectionResizeMode(7, QHeaderView.ResizeMode.Interactive) # And for the last column too
+        for i in range(len(self.header_labels)):
+            self.table.setColumnWidth(i, 150)
+            # Add these lines to explicitly set resize mode for each column.
+            self.table.horizontalHeader().setSectionResizeMode(i, QHeaderView.ResizeMode.Interactive)
 
     def export_to_excel(self):
         """Export table data to Excel file."""
@@ -265,14 +245,14 @@ class TableWidget(QWidget):
 
             # Debug: Verify total count
             total_items = session.query(model).count()
-            print(f"Total items in view: {total_items}")  # Should match pgAdmin
+            # print(f"Total items in view: {total_items}")  # Should match pgAdmin
             
             self.total_pages = max(1, (total_items + self.items_per_page - 1) // self.items_per_page)
-            print(f"Total pages: {self.total_pages}")
+            # print(f"Total pages: {self.total_pages}")
 
             offset = (self.current_page - 1) * self.items_per_page
             limit = self.items_per_page
-            print(f"Loading page {self.current_page} (offset {offset}, limit {limit})")
+            # print(f"Loading page {self.current_page} (offset {offset}, limit {limit})")
 
             if model.__tablename__ == "endorsement_combined":
                 # Get fresh results with explicit ordering
@@ -281,9 +261,9 @@ class TableWidget(QWidget):
                     .offset(offset).limit(limit).all()
 
                 # Debug: Print all fetched records
-                print(f"Fetched {len(results)} records:")
-                for i, r in enumerate(results):
-                    print(f"{i}: {r.t_refno} | {r.t_lot_number} | {r.t_total_quantity}")
+                # print(f"Fetched {len(results)} records:")
+                # for i, r in enumerate(results):
+                #     print(f"{i}: {r.t_refno} | {r.t_lot_number} | {r.t_total_quantity}")
 
                 self.table.setRowCount(len(results))
                 

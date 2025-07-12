@@ -137,7 +137,7 @@ class EndorsementFormSchema(BaseModel):
             raise ValueError("Lot number format must be '1234AB' or '1234AB-1235AB'")
     
     #     return self
-    @model_validator(mode='after')
+    @model_validator(mode="after")
     def validate_lot_quantity_proportion(self):
         if "-" in self.t_lotnumberwhole:
             # For range lot numbers
