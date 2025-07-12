@@ -10,7 +10,7 @@ from PyQt6.QtCore import Qt, pyqtSignal
 
 from typing import Union, Callable, Type, Literal
 from sqlalchemy.orm import Session, DeclarativeMeta
-from app.helpers import button_cursor_pointer
+from app.helpers import button_cursor_pointer, load_styles
 from app.StyledMessage import StyledMessageBox
 from constants.Enums import TableHeader
 import pandas as pd
@@ -54,7 +54,8 @@ class TableWidget(QWidget):
         self.items_per_page = items_per_page # Store items per page
         self.current_page = 1 # Initialize current page
         self.total_pages = 1 # Initialize total pages
-        
+        self.filtered_results = None
+
         self.init_ui()
         self.load_data()
         self.apply_styles()
@@ -170,12 +171,9 @@ class TableWidget(QWidget):
         # This is correct: The scrollbar will appear only if needed
         self.table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
 
-        try:
-            with open(qss_path, "r") as f:
-                self.setStyleSheet(f.read())
-        except FileNotFoundError:
-            print("Warning: Style file not found. Default styles will be used.")
-
+        # -------------- load the styling here ------------------
+        load_styles(qss_path, self)
+        
         self.table.setAlternatingRowColors(True)
         self.table.setShowGrid(False)
         self.table.verticalHeader().setVisible(False)
@@ -286,6 +284,80 @@ class TableWidget(QWidget):
             raise
         finally:
             session.close()
+    
+    # def update_table_with_results(self, results, apply_pagination=True):
+    #     """Update the table widget with filtered results"""
+    #     self.filtered_results = results
+        
+    #     if apply_pagination:
+    #         total_items = len(results)
+    #         self.total_pages = max(1, (total_items + self.items_per_page - 1) // self.items_per_page)
+    #         self.current_page = min(self.current_page, self.total_pages)  # Ensure current page is valid
+    #         # Apply pagination
+    #         offset = (self.current_page - 1) * self.items_per_page
+    #         paginated_results = results[offset:offset + self.items_per_page]
+        
+    #     else:
+    #         # Show all results without pagination
+    #         paginated_results = results
+    #         self.total_pages = 1
+    #         self.current_page = 1
+
+    #     self.table.setRowCount(len(results))
+    #     for row_idx, record in enumerate(results):
+    #         self._set_table_item(row_idx, 0, record.t_refno)
+    #         self._set_table_item(row_idx, 1, record.t_date_endorsed.strftime("%Y-%m-%d"))
+    #         self._set_table_item(row_idx, 2, record.t_category)
+    #         self._set_table_item(row_idx, 3, record.t_prodcode)
+    #         self._set_table_item(row_idx, 4, record.t_lot_number)
+    #         self._set_table_item(row_idx, 5, f"{float(record.t_total_quantity):.2f}")
+    #         self._set_table_item(row_idx, 6, record.t_status)
+    #         self._set_table_item(row_idx, 7, record.t_endorsed_by)
+    #         self._set_table_item(row_idx, 8, record.t_source_table)
+    #         self._set_table_item(row_idx, 9, record.t_has_excess)
+        
+    #     # Disable pagination controls when filtering
+    #     self.prev_btn.setEnabled(False)
+    #     self.next_btn.setEnabled(False)
+    #     self.page_label.setText(f"Showing {len(results)} filtered records")
+
+    def update_table_with_results(self, results, apply_pagination=False):
+        """Update the table widget with filtered results"""
+        self.filtered_results = results  # Store the full filtered results
+        
+        if apply_pagination:
+            # Calculate pagination
+            total_items = len(results)
+            self.total_pages = max(1, (total_items + self.items_per_page - 1) // self.items_per_page)
+            self.current_page = min(self.current_page, self.total_pages)  # Ensure current page is valid
+            
+            # Apply pagination
+            offset = (self.current_page - 1) * self.items_per_page
+            paginated_results = results[offset:offset + self.items_per_page]
+        else:
+            # Show all results without pagination
+            paginated_results = results
+            self.total_pages = 1
+            self.current_page = 1
+        
+        # Update the table
+        self.table.setRowCount(len(paginated_results))
+        
+        for row_idx, record in enumerate(paginated_results):
+            self._set_table_item(row_idx, 0, record.t_refno)
+            self._set_table_item(row_idx, 1, record.t_date_endorsed.strftime("%Y-%m-%d"))
+            self._set_table_item(row_idx, 2, record.t_category)
+            self._set_table_item(row_idx, 3, record.t_prodcode)
+            self._set_table_item(row_idx, 4, record.t_lot_number)
+            self._set_table_item(row_idx, 5, f"{float(record.t_total_quantity):.2f}")
+            self._set_table_item(row_idx, 6, record.t_status)
+            self._set_table_item(row_idx, 7, record.t_endorsed_by)
+            self._set_table_item(row_idx, 8, record.t_source_table)
+            self._set_table_item(row_idx, 9, record.t_has_excess)
+        
+        # Update pagination controls
+        self.update_pagination_controls()
+        self.page_label.setText(f"Page {self.current_page} of {self.total_pages} ({len(results)} total matches)")
 
     def _set_table_item(self, row: int, col: int, value: str):
         """Helper method to set table items."""

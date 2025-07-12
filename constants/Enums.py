@@ -49,7 +49,7 @@ class StatusEnum(Enum):
 
 class RemarksEnum(Enum):
     NO_REMARKS = "No Remarks"
-    OVERSIZE = "OVER-SIZED"
+    OVERSIZED = "OVERSIZED"
 
 class TableHeader():
     LABELS = {

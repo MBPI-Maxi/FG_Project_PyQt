@@ -76,7 +76,8 @@ QPushButton#endorsement-export-btn:hover {
 /* NEXT AND PREVIOUS QPUSHBUTTON DESIGN */
 QPushButton#tablewidget-prev-btn,
 QPushButton#tablewidget-next-btn {
-    background-color: #5bc0de;
+    /* background-color: #5bc0de; */
+    background-color: #3a9eea;
     color: white;
     border: none;
     padding: 6px 12px;
@@ -85,7 +86,8 @@ QPushButton#tablewidget-next-btn {
 
 QPushButton#tablewidget-prev-btn:hover
 QPushButton#tablewidget-next-btn:hover {
-    background-color: #31b0d5;
+    /* background-color: #31b0d5; */
+    background-color: #3a9eea;
 }
 
 QPushButton#tablewidget-prev-btn:disabled,

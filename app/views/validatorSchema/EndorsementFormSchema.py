@@ -1,8 +1,10 @@
 from pydantic import BaseModel, Field, field_validator, model_validator
 from datetime import date
 from constants.Enums import StatusEnum, CategoryEnum
+from typing import Optional
 import re
 import math
+
 
 # --- FORM SCHEMA IS CREATED HERE FOR SERIALIZATION AND VALIDATION ---
 class EndorsementFormSchema(BaseModel):
@@ -64,7 +66,11 @@ class EndorsementFormSchema(BaseModel):
         False,
         description="User's input for 'has excess' checkbox"
     )
-
+    t_bag_num: Optional[int] = Field(
+        None,
+        ge=0,
+        description="Number of bags (optional)"
+    )
 
     class Config:
         # Ensures that Pydantic works correctly with Enum values
@@ -90,6 +96,22 @@ class EndorsementFormSchema(BaseModel):
         
         return value
     
+    @field_validator("t_bag_num", mode="before")
+    @classmethod
+    def validate_t_bag_num(cls, value):
+        if value == 0:
+            return None
+        
+        try:
+            int_value = int(value)
+            
+            if int_value <= 0:
+                raise ValueError("Bag number must be a positive integer")
+            
+            return int_value
+        except ValueError:
+            raise ValueError("Bag number must be a positive integer")
+
     @field_validator("t_lotnumberwhole")
     @classmethod
     def validate_lot_number(cls, value):

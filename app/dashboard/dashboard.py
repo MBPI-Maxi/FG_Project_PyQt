@@ -15,6 +15,7 @@ from app.views import (
     QCFailedEndorsement
 )
 
+from app.helpers import load_styles
 from PyQt6.QtGui import QFont
 from PyQt6.QtCore import QSize, QTimer
 from typing import Type, Callable
@@ -66,17 +67,17 @@ class FGDashboard(QMainWindow):
 
         # INITIALIZED STACK (index by order)
         # INCOMING
-        self.add_stack_page("Endorsement", "Endorsement", EndorsementMainView(session_factory=self.Session))
-        self.add_stack_page("QC Failed to Passed", "QC Failed to Passed", QCFailedToPassed())
-        self.add_stack_page("QC Lab Excess", "QC Lab Excess", QCLabExcess())
-        self.add_stack_page("Receiving Report", "Receiving Report", ReceivingReport())
+        self.add_stack_page("Endorsement Widget", "Endorsement Form", EndorsementMainView(session_factory=self.Session))
+        self.add_stack_page("QC Failed to Passed Widget", "QC Failed to Passed Form", QCFailedToPassed())
+        self.add_stack_page("QC Lab Excess Widget", "QC Lab Excess Form", QCLabExcess())
+        self.add_stack_page("Receiving Report Widget", "Receiving Report Form", ReceivingReport())
 
         # OUTGOING
-        self.add_stack_page("Delivery Receipt", "Delivery Receipt", DeliveryReceipt())
-        self.add_stack_page("Return Replacement", "Return Replacement", ReturnReplacement())
-        self.add_stack_page("Outgoing Form", "Outgoing Form", OutgoingRecord())
-        self.add_stack_page("Requisition Logbook", "Requisition Logbook", RequisitionLogbook())
-        self.add_stack_page("QC Failed Endorsement", "QC Failed Endorsement", QCFailedEndorsement())
+        self.add_stack_page("Delivery Receipt Widget", "Delivery Receipt Form", DeliveryReceipt())
+        self.add_stack_page("Return Replacement Widget", "Return Replacement Form", ReturnReplacement())
+        self.add_stack_page("Outgoing Form Widget", "Outgoing Form", OutgoingRecord())
+        self.add_stack_page("Requisition Logbook Widget", "Requisition Logbook Form", RequisitionLogbook())
+        self.add_stack_page("QC Failed Endorsement Widget", "QC Failed Endorsement Form", QCFailedEndorsement())
 
         # STATUS BAR
         self.setup_status_bar()
@@ -282,11 +283,7 @@ class FGDashboard(QMainWindow):
     def apply_styles(self):
         qss_path = os.path.join(os.path.dirname(__file__), "styles", "dashboard.css")
 
-        try:
-            with open(qss_path, "r") as f:
-                self.setStyleSheet(f.read())
-        except FileNotFoundError:
-            print("Warning: Style file not found. Default styles will be used.")
+        load_styles(qss_path, self)
     
     def close_dashboard_main_window(self):
         # close the main widget here

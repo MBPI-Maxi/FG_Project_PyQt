@@ -17,7 +17,9 @@ QLabel {
     color: black;
 }
 
-QPushButton#endorsementList-search-btn {
+QPushButton#endorsementList-search-btn,
+QPushButton#endorsementList-reset-btn
+{
     background-color: #3a9eea;
     color: white;            
     border: none;
@@ -26,7 +28,9 @@ QPushButton#endorsementList-search-btn {
     width: 100px;
 }
 
-QPushButton#endorsementList-search-btn:hover {
+QPushButton#endorsementList-search-btn:hover, 
+QPushButton#endorsementList-reset-btn:hover
+{
     background-color: #317dc4;  
     color: white; 
 }

@@ -29,6 +29,7 @@ class EndorsementModel(Base):
     t_wtlot = Column(Float, nullable=False)
     t_status = Column(Enum(StatusEnum), nullable=False, default=StatusEnum.FAILED.value)
     t_has_excess = Column(Boolean, default=False, nullable=False)
+    t_bag_num = Column(Integer, nullable=True)
     t_endorsed_by = Column(String, nullable=False)
     t_remarks = Column(String(100), nullable=True)
 
