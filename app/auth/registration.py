@@ -12,7 +12,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 from typing import Callable
 
-from app.helpers import button_cursor_pointer, record_auth_log, add_new_user
+from app.helpers import button_cursor_pointer, record_auth_log, add_new_user, load_styles
 from app.StyledMessage import StyledMessageBox
 from models import User, AuthLog
 from constants.Enums import Department, UserRole, AuthLogStatus
@@ -116,15 +116,10 @@ class Registration(QWidget):
         Sets pointer cursor on register button. Falls back to default style if CSS file not found.
         """
         qss_path = os.path.join(os.path.dirname(__file__), "styles", "registration.css")
-        
-        try:
-            button_cursor_pointer(self.register_button)
+        button_cursor_pointer(self.register_button)
+            
+        load_styles(qss_path, self)
 
-            with open(qss_path, "r") as f:
-                self.setStyleSheet(f.read())
-        except FileNotFoundError:
-            print("Warning: Style file not found. Default styles will be used.")
-        
     def hash_password(self, password):
         """
         Hash a plaintext password using SHA-256.

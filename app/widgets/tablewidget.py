@@ -8,22 +8,13 @@ from PyQt6.QtWidgets import (
 
 from PyQt6.QtCore import Qt, pyqtSignal
 
-from typing import Union, Callable, Type
+from typing import Union, Callable, Type, Literal
 from sqlalchemy.orm import Session, DeclarativeMeta
-from app.helpers import button_cursor_pointer
+from app.helpers import button_cursor_pointer, load_styles
 from app.StyledMessage import StyledMessageBox
+from constants.Enums import TableHeader
 import pandas as pd
 import os
-
-# this is a mapping of the headers based on what view it is currently belong
-views_header_label_map = {
-    "endorsement": [
-        "Ref No", "Date Endorse", "Category", 
-        "Product Code", "Lot Number", 
-        "Qty (kg)", "Status", "Endorsed By"
-    ],
-    
-}
 
 class TableWidget(QWidget):
     double_clicked = pyqtSignal(str)
@@ -32,9 +23,15 @@ class TableWidget(QWidget):
         self,
         session_factory: Callable[..., Session],
         db_model: Type[DeclarativeMeta] = None,
-        view_type: Union[str, None] = None,
+        view_type: Union[
+            Literal[
+                "endorsement-list", 
+                "endorsement-create"
+            ], 
+            None
+        ] = None,
         parent=None,
-        items_per_page: int = 20 # New: items per page for pagination
+        items_per_page: int = 20, # New: items per page for pagination
     ):
         super().__init__(parent)
         self.export_btn = QPushButton("Export Excel")
@@ -57,6 +54,7 @@ class TableWidget(QWidget):
         self.items_per_page = items_per_page # Store items per page
         self.current_page = 1 # Initialize current page
         self.total_pages = 1 # Initialize total pages
+        self.filtered_results = None
 
         self.init_ui()
         self.load_data()
@@ -68,7 +66,6 @@ class TableWidget(QWidget):
             QSizePolicy.Policy.Expanding
         )
         self.layout = QVBoxLayout(self)
-
 
         # CREATE THE ACTUAL TABLE HERE
         self.table = QTableWidget()
@@ -87,15 +84,17 @@ class TableWidget(QWidget):
         self.table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.table.customContextMenuRequested.connect(self.show_context_menu)
 
-        # CONFIGURE HEADERS
-        self.table.setColumnCount(8)
         # self.table.setHorizontalHeaderLabels()
 
         # IF ELSE STATEMENT HERE TO CHANGE THE COLUMN BASED ON CONDITION
         # if selfF.view_type and self.view_type == self.valid_views_to_show_export_btn[0]:
 
         if self.view_type and self.view_type.startswith("endorsement"):
-            self.table.setHorizontalHeaderLabels(views_header_label_map["endorsement"])
+            self.header_labels = TableHeader.get_header("endorsement")
+            
+            # CONFIGURE HEADERS (make this dynamic based on the )
+            self.table.setColumnCount(len(self.header_labels))
+            self.table.setHorizontalHeaderLabels(self.header_labels)
 
         self.table.horizontalHeader().setStretchLastSection(True)
 
@@ -122,8 +121,8 @@ class TableWidget(QWidget):
         self.prev_btn.clicked.connect(self.prev_page)
         self.prev_btn.setObjectName("tablewidget-prev-btn")
 
-
         self.page_label = QLabel(f"Page {self.current_page} of {self.total_pages}")
+        self.page_label.setObjectName("table-widget-page-label")
         
         self.next_btn = QPushButton("Next")
         self.next_btn.clicked.connect(self.next_page)
@@ -135,10 +134,16 @@ class TableWidget(QWidget):
         self.items_per_page_combo.currentIndexChanged.connect(self.update_items_per_page)
         self.items_per_page_combo.setObjectName("table-widget-items-per-page-combo")
 
+        # refresh button
+        self.refresh_btn = QPushButton("Refresh")
+        self.refresh_btn.clicked.connect(self.reload_table)
+
         self.items_per_page_label = QLabel("Items per page:")
+        self.items_per_page_label.setObjectName("table-widget-items-per-page-label")
 
         self.pagination_layout.addWidget(self.items_per_page_label)
         self.pagination_layout.addWidget(self.items_per_page_combo)
+        self.pagination_layout.addWidget(self.refresh_btn)
         self.pagination_layout.addStretch()
         self.pagination_layout.addWidget(self.prev_btn)
         self.pagination_layout.addWidget(self.page_label)
@@ -146,12 +151,14 @@ class TableWidget(QWidget):
 
         self.layout.addLayout(self.pagination_layout)
 
-
         btn_container = QHBoxLayout()
         btn_container.addWidget(self.export_btn)
         btn_container.addStretch()
         self.layout.addLayout(btn_container)
         self.export_btn.clicked.connect(self.export_to_excel)
+
+    def reload_table(self):
+        self.load_data()
 
     def apply_styles(self):
         qss_path = os.path.join(os.path.dirname(__file__), "styles", "table.css")
@@ -164,13 +171,9 @@ class TableWidget(QWidget):
         # This is correct: The scrollbar will appear only if needed
         self.table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
 
-        try:
-            with open(qss_path, "r") as f:
-                # self.table.setStyleSheet(f.read())
-                self.setStyleSheet(f.read())
-        except FileNotFoundError:
-            print("Warning: Style file not found. Default styles will be used.")
-
+        # -------------- load the styling here ------------------
+        load_styles(qss_path, self)
+        
         self.table.setAlternatingRowColors(True)
         self.table.setShowGrid(False)
         self.table.verticalHeader().setVisible(False)
@@ -178,36 +181,11 @@ class TableWidget(QWidget):
         self.table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
         self.table.setFocusPolicy(Qt.FocusPolicy.NoFocus)
 
-        # You correctly commented this out, which is essential for scrollbar to appear
-        # self.table.horizontalHeader().setStretchLastSection(True)
-
         # Set column widths (adjust as needed)
-        self.table.setColumnWidth(0, 100)  # Ref No
-        self.table.setColumnWidth(1, 100)  # Date
-        self.table.setColumnWidth(2, 100)  # Category
-        self.table.setColumnWidth(3, 150)  # Product Code
-        self.table.setColumnWidth(4, 150)  # Lot Number
-        self.table.setColumnWidth(5, 80)   # Qty (kg)
-        self.table.setColumnWidth(6, 80)   # Status
-        # Don't forget the 8th column (index 7) from your header labels
-        self.table.setColumnWidth(7, 120)  # Endorsed By - Give it an initial width
-
-        # Add these lines to explicitly set resize mode for each column.
-        # If you want them to cause a scrollbar when exceeding width,
-        # use Interactive or Fixed.
-        self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Interactive)
-        self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Interactive)
-        self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Interactive)
-        self.table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.Interactive)
-        self.table.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeMode.Interactive)
-        self.table.horizontalHeader().setSectionResizeMode(5, QHeaderView.ResizeMode.Interactive)
-        self.table.horizontalHeader().setSectionResizeMode(6, QHeaderView.ResizeMode.Interactive)
-        self.table.horizontalHeader().setSectionResizeMode(7, QHeaderView.ResizeMode.Interactive) # And for the last column too
-
-        # Style pagination buttons and combo box (you can add more styles to table.css)
-        
-        self.page_label.setStyleSheet("QLabel { font-weight: bold; padding: 0 10px; }")
-        self.items_per_page_label.setStyleSheet("QLabel { padding-left: 5px; }")
+        for i in range(len(self.header_labels)):
+            self.table.setColumnWidth(i, 150)
+            # Add these lines to explicitly set resize mode for each column.
+            self.table.horizontalHeader().setSectionResizeMode(i, QHeaderView.ResizeMode.Interactive)
 
     def export_to_excel(self):
         """Export table data to Excel file."""
@@ -258,44 +236,128 @@ class TableWidget(QWidget):
             )
 
     def load_data(self):
-        """Load data from the database with pagination."""
+        """Load data from the endorsement_combined view with pagination."""
         try:
             session = self.Session()
-            endorsement_model = self.db_model
+            model = self.db_model
 
-            # Get total count for pagination calculation
-            total_items = session.query(endorsement_model).count()
-            self.total_pages = (total_items + self.items_per_page - 1) // self.items_per_page
+            # Debug: Verify total count
+            total_items = session.query(model).count()
+            # print(f"Total items in view: {total_items}")  # Should match pgAdmin
+            
+            self.total_pages = max(1, (total_items + self.items_per_page - 1) // self.items_per_page)
+            # print(f"Total pages: {self.total_pages}")
 
-            # Calculate offset and limit for the current page
             offset = (self.current_page - 1) * self.items_per_page
             limit = self.items_per_page
+            # print(f"Loading page {self.current_page} (offset {offset}, limit {limit})")
 
-            endorsements = session.query(endorsement_model)\
-                .order_by(endorsement_model.t_date_endorsed.desc(), endorsement_model.t_refno.desc())\
-                .offset(offset)\
-                .limit(limit)\
-                .all()
+            if model.__tablename__ == "endorsement_combined":
+                # Get fresh results with explicit ordering
+                results = session.query(model)\
+                    .order_by(model.t_lot_number.asc())\
+                    .offset(offset).limit(limit).all()
 
-            self.table.setRowCount(len(endorsements))
+                # Debug: Print all fetched records
+                # print(f"Fetched {len(results)} records:")
+                # for i, r in enumerate(results):
+                #     print(f"{i}: {r.t_refno} | {r.t_lot_number} | {r.t_total_quantity}")
 
-            for row, endorsement in enumerate(endorsements):
-                self._set_table_item(row, 0, endorsement.t_refno)
-                self._set_table_item(row, 1, endorsement.t_date_endorsed.strftime("%Y-%m-%d"))
-                self._set_table_item(row, 2, endorsement.t_category.value)
-                self._set_table_item(row, 3, endorsement.t_prodcode)
-                self._set_table_item(row, 4, endorsement.t_lotnumberwhole)
-                self._set_table_item(row, 5, f"{endorsement.t_qtykg:.2f}")
-                self._set_table_item(row, 6, endorsement.t_status.value)
-                self._set_table_item(row, 7, endorsement.t_endorsed_by)
+                self.table.setRowCount(len(results))
+                
+                # Correct column mapping (0-7)
+                for row_idx, record in enumerate(results):
+                    self._set_table_item(row_idx, 0, record.t_refno)
+                    self._set_table_item(row_idx, 1, record.t_date_endorsed.strftime("%Y-%m-%d"))  # Fixed column index
+                    self._set_table_item(row_idx, 2, record.t_category)
+                    self._set_table_item(row_idx, 3, record.t_prodcode)
+                    self._set_table_item(row_idx, 4, record.t_lot_number)
+                    self._set_table_item(row_idx, 5, f"{float(record.t_total_quantity):.2f}")
+                    self._set_table_item(row_idx, 6, record.t_status)
+                    self._set_table_item(row_idx, 7, record.t_endorsed_by)
+                    self._set_table_item(row_idx, 8, record.t_source_table)
+                    self._set_table_item(row_idx, 9, record.t_has_excess)
 
-            self.table.verticalHeader().setDefaultSectionSize(24)
-            self.table.verticalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Fixed)
-            self.table.resizeColumnsToContents()
-
-            self.update_pagination_controls() # Update button states and label
+                self.update_pagination_controls()
+        except Exception as e:
+            print(f"Error loading data: {str(e)}")
+            raise
         finally:
             session.close()
+    
+    # def update_table_with_results(self, results, apply_pagination=True):
+    #     """Update the table widget with filtered results"""
+    #     self.filtered_results = results
+        
+    #     if apply_pagination:
+    #         total_items = len(results)
+    #         self.total_pages = max(1, (total_items + self.items_per_page - 1) // self.items_per_page)
+    #         self.current_page = min(self.current_page, self.total_pages)  # Ensure current page is valid
+    #         # Apply pagination
+    #         offset = (self.current_page - 1) * self.items_per_page
+    #         paginated_results = results[offset:offset + self.items_per_page]
+        
+    #     else:
+    #         # Show all results without pagination
+    #         paginated_results = results
+    #         self.total_pages = 1
+    #         self.current_page = 1
+
+    #     self.table.setRowCount(len(results))
+    #     for row_idx, record in enumerate(results):
+    #         self._set_table_item(row_idx, 0, record.t_refno)
+    #         self._set_table_item(row_idx, 1, record.t_date_endorsed.strftime("%Y-%m-%d"))
+    #         self._set_table_item(row_idx, 2, record.t_category)
+    #         self._set_table_item(row_idx, 3, record.t_prodcode)
+    #         self._set_table_item(row_idx, 4, record.t_lot_number)
+    #         self._set_table_item(row_idx, 5, f"{float(record.t_total_quantity):.2f}")
+    #         self._set_table_item(row_idx, 6, record.t_status)
+    #         self._set_table_item(row_idx, 7, record.t_endorsed_by)
+    #         self._set_table_item(row_idx, 8, record.t_source_table)
+    #         self._set_table_item(row_idx, 9, record.t_has_excess)
+        
+    #     # Disable pagination controls when filtering
+    #     self.prev_btn.setEnabled(False)
+    #     self.next_btn.setEnabled(False)
+    #     self.page_label.setText(f"Showing {len(results)} filtered records")
+
+    def update_table_with_results(self, results, apply_pagination=False):
+        """Update the table widget with filtered results"""
+        self.filtered_results = results  # Store the full filtered results
+        
+        if apply_pagination:
+            # Calculate pagination
+            total_items = len(results)
+            self.total_pages = max(1, (total_items + self.items_per_page - 1) // self.items_per_page)
+            self.current_page = min(self.current_page, self.total_pages)  # Ensure current page is valid
+            
+            # Apply pagination
+            offset = (self.current_page - 1) * self.items_per_page
+            paginated_results = results[offset:offset + self.items_per_page]
+        else:
+            # Show all results without pagination
+            paginated_results = results
+            self.total_pages = 1
+            self.current_page = 1
+        
+        # Update the table
+        self.table.setRowCount(len(paginated_results))
+        
+        for row_idx, record in enumerate(paginated_results):
+            self._set_table_item(row_idx, 0, record.t_refno)
+            self._set_table_item(row_idx, 1, record.t_date_endorsed.strftime("%Y-%m-%d"))
+            self._set_table_item(row_idx, 2, record.t_category)
+            self._set_table_item(row_idx, 3, record.t_prodcode)
+            self._set_table_item(row_idx, 4, record.t_lot_number)
+            self._set_table_item(row_idx, 5, f"{float(record.t_total_quantity):.2f}")
+            self._set_table_item(row_idx, 6, record.t_status)
+            self._set_table_item(row_idx, 7, record.t_endorsed_by)
+            self._set_table_item(row_idx, 8, record.t_source_table)
+            self._set_table_item(row_idx, 9, record.t_has_excess)
+        
+        # Update pagination controls
+        self.update_pagination_controls()
+        self.page_label.setText(f"Page {self.current_page} of {self.total_pages} ({len(results)} total matches)")
 
     def _set_table_item(self, row: int, col: int, value: str):
         """Helper method to set table items."""
@@ -331,8 +393,6 @@ class TableWidget(QWidget):
         # Connect actions to functions
         # TODO: Add a dialog box before they edit anything
         edit_action.triggered.connect(lambda: print(f"Edit action triggered - Row: {row}, Ref No: {ref_no}, Product Code: {product_code}"))
-        # delete_action.triggered.connect(lambda: print(f"Delete action triggered - Row: {row}, Ref No: {ref_no}, Product Code: {product_code}"))
-        # add_action.triggered.connect(lambda: print(f"Add action triggered from Row: {row}, Ref No: {ref_no}"))
 
         # Show the menu at the cursor position
         menu.exec(self.table.viewport().mapToGlobal(pos))

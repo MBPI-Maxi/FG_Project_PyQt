@@ -1,21 +1,20 @@
 from PyQt6.QtWidgets import (
     QWidget, QLabel, QVBoxLayout, QHBoxLayout,
     QLineEdit, QDateEdit, QComboBox, QDoubleSpinBox, QPushButton,
-    QCheckBox, QSizePolicy, QScrollArea,
-    QStackedWidget, QSpinBox
+    QCheckBox, QSplitter, QSizePolicy,
+    QStackedWidget
 )
 
 from app.helpers import (
     fetch_current_t_refno_in_endorsement,
     populate_endorsement_items,
-    button_cursor_pointer,
-    load_styles
+    button_cursor_pointer
 ) 
 
 from PyQt6.QtCore import QDate, Qt
 from pydantic import ValidationError
 
-from typing import Union, Callable, Type
+from typing import Union, overload, Callable, Type
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 
@@ -30,19 +29,14 @@ from models import (
     EndorsementModelT2,
     EndorsementLotExcessModel,
     EndorsementCombinedView
-)
-
-# CUSTOM WIDGET
-from app.widgets import (
-    LotNumberLineEdit,
-    TableWidget,
-    ModifiedComboBox,
-    ModifiedDateEdit,
-    ModifiedDoubleSpinBox
-)
+)   
 
 # ENDORSEMENT SCHEMA
 from app.views.validatorSchema import EndorsementFormSchema
+
+# CUSTOM WIDGET
+from app.widgets.lineedits import LotNumberLineEdit
+from app.widgets.tablewidget import TableWidget
 
 import os
 import math
@@ -102,32 +96,52 @@ class EndorsementCreateView(QWidget):
         self.init_ui()
         self.apply_styles()
 
+    @overload
+    def create_input_horizontal_layout(
+        self,
+        label_text: str,
+        widget: QWidget,
+        field_name: str,
+        error_label_name: str
+    ) -> None: 
+        ...
+    
+    @overload
+    def create_input_horizontal_layout(
+        self,
+        label_text: str,
+        widget: QLineEdit,
+        field_name: str,
+        error_label_name: str
+    ) -> None:
+        ...
+
     def init_ui(self):
-        # helper function in creating input rows
+        self.main_layout = QVBoxLayout()
+        self.main_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+
+        # Dictionary to store references to input widgets and error labels
+        self.form_fields = {} 
+
+        # Helper function to create a labeled input field
         def create_input_row(
-            label_text: str,
-            widget: Type[QWidget],
-            field_name: str,
+            label_text: str, 
+            widget: Type[QWidget], 
+            field_name: str, 
             error_label_name: str
         ):
-            # ------------ Main container for the entire row -------------
-            row_container = QWidget()
-            row_layout = QHBoxLayout(row_container)
-            row_layout.setContentsMargins(0, 5, 0, 5)  # Vertical padding
-            row_layout.setSpacing(10)
+            h_layout = QHBoxLayout()
+            h_layout.setContentsMargins(0, 0, 0, 0)
+            h_layout.setSpacing(0)
 
-            # -------------- Label (fixed width) ----------------
             label = QLabel(label_text)
-            label.setFixedWidth(150)  # Adjust as needed
-            label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            label.setFixedWidth(200) # Or whatever consistent width
             
-            # ---------- width of the widget field --------------
-            widget.setFixedWidth(450)  # Set your desired field width
+            h_layout.addWidget(label) 
+            h_layout.addWidget(widget)
             
-            if isinstance(widget, (QComboBox, ModifiedComboBox)):
-                widget.setCursor(Qt.CursorShape.PointingHandCursor)
+            widget.setFixedWidth(400) # <-- consistent width here
 
-            # ---------- Error label (auto-expand) --------------
             error_label = QLabel()
             error_label.setStyleSheet("""
                 color: red;
@@ -135,81 +149,75 @@ class EndorsementCreateView(QWidget):
                 font-style: italic;
                 margin-left: 5px;
             """)
+            
             error_label.setObjectName(f"{field_name}_error_label")
-            error_label.setWordWrap(True)
+            h_layout.addWidget(error_label)
             
-            # -------------- Add widgets to layout --------------------
-            row_layout.addWidget(label)
-            row_layout.addWidget(widget)
-            row_layout.addWidget(error_label)
-            row_layout.setStretch(2, 1)  # Let error label expand
-            
-            # -----------------  Store references -------------------------
             self.form_fields[field_name] = widget
             self.form_fields[error_label_name] = error_label
             
-            self.main_layout.addWidget(row_container)
-
-        # -------------------  Main container with vertical layout ----------------------------
-        form_container = QWidget()
-        self.main_layout = QVBoxLayout(form_container)
-        self.main_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
-        self.main_layout.setSpacing(12)
-
-        # Dictionary to store references to input widgets and error labels
-        self.form_fields = {} 
-
-        # ---------------- Create a scroll area for the form inputs only ----------------------
-        form_scroll = QScrollArea()
-        form_scroll.setWidgetResizable(True)
-        form_scroll.setWidget(form_container)
-        form_scroll.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-    
-        # -------------   Create all form rows with scrollable inputs --------------------------
+            self.main_layout.addLayout(h_layout)
+        
+        # 1. Reference Number
         self.create_t_refno_row(create_input_row)
+    
+        # 2. Date Endorsed
         self.create_date_endorsed_row(create_input_row)
+        # 3. Category
         self.create_category_row(create_input_row)
+        # 4. Product Code
         self.create_prod_code_row(create_input_row)
+        # 5. Whole Lot Number
         self.create_lot_number_row(create_input_row)
-        self.create_weight_per_lot_row(create_input_row)
+        # 6. Quantity (kg)
         self.create_qtykg_row(create_input_row)
-        self.create_bag_input_row(create_input_row)
+        # 7. Weight per Lot
+        self.create_weight_per_lot_row(create_input_row)
+        # 8. Status
         self.create_status_row(create_input_row)
+        # 9. Endorsed By
         self.create_endorsed_by_input_row(create_input_row)
+        # 8. Remarks
         self.create_remarks_input_row(create_input_row)
 
-        # --------------  Add save button (outside the scroll area) -------------------------
+        # Spacer to push elements to the top
+        self.main_layout.addStretch(1)
+
+        # Save Button
         self.save_button = QPushButton("Save Endorsement")
         self.save_button.setObjectName("endorsement-save-btn")
         self.save_button.clicked.connect(self.save_endorsement)
 
-        # ------------- Create table widget ------------------
-        self.table_widget = self.show_table()
+        # --------------- test_btn ----------------------------
+        self.test_btn = QPushButton("Click to test output")
+        self.test_btn.clicked.connect(
+            lambda: print(self.t_category_input.currentText() == CategoryEnum.MB.value)
+        )
 
-        # ------------- Main layout with form scroll area and table ------------------
-        main_layout = QVBoxLayout(self)
-        
-        # ------------ Add form scroll area ------------------
-        main_layout.addWidget(form_scroll)
-        
-        # ----------- Add save button below the scrollable form ---------------
-        button_container = QWidget()
-        button_layout = QHBoxLayout(button_container)
-        button_layout.setContentsMargins(0, 0, 0, 0)
-        button_layout.addWidget(self.save_button)
-        button_layout.addStretch()
-
-        main_layout.addWidget(button_container)
-        
-        # ------------ Add table widget with stretch factor ----------------
-        main_layout.addWidget(self.table_widget, stretch=1)
-
-        # --------------- Connect real-time validation signals -----------------
+        # ---------------- real-time connection -----------------------
         self.t_lotnumberwhole_input.textChanged.connect(self.validate_lot_quantity)
         self.t_qtykg_input.valueChanged.connect(self.validate_lot_quantity)
         self.t_wtlot_input.valueChanged.connect(self.validate_lot_quantity)
         self.has_excess_checkbox.stateChanged.connect(self.validate_lot_quantity)
 
+        self.main_layout.addWidget(self.save_button)
+        self.main_layout.addWidget(self.test_btn)
+        
+        # form table
+        splitter = QSplitter(Qt.Orientation.Vertical)
+        form_container = QWidget()
+        form_container.setLayout(self.main_layout)
+        splitter.addWidget(form_container)
+        splitter.addWidget(self.table_widget)
+
+        # configuring the splitter behavior:
+        splitter.setStretchFactor(0, 1)
+
+        self.main_layout.setSpacing(12)
+        container_layout = QVBoxLayout(self)
+        container_layout.addWidget(splitter)
+        self.setLayout(container_layout)
+    
     def show_table(self):
         table = TableWidget(
             session_factory=self.Session, 
@@ -221,6 +229,136 @@ class EndorsementCreateView(QWidget):
 
         return table
         
+    # OLD CODE (original)
+    # def validate_lot_quantity(self):
+    #     """Real-time validation of lot quantity proportion"""
+    #     try:
+    #         lot_text = self.t_lotnumberwhole_input.text()
+    #         qty = self.t_qtykg_input.value()
+    #         wtlot = self.t_wtlot_input.value()
+    #         has_excess = self.has_excess_checkbox.isChecked()
+            
+    #         if not lot_text or wtlot <= 0:
+    #             return
+                
+    #         if "-" in lot_text:
+    #             try:
+    #                 start, end = lot_text.split("-")
+    #                 start_num = int(start[:4])
+    #                 end_num = int(end[:4])
+    #                 num_lots = (end_num - start_num) + 1
+    #                 expected_full = num_lots * wtlot
+                    
+    #                 if has_excess:
+    #                     if qty < (expected_full - wtlot):
+    #                         self.show_quantity_error(
+    #                             f"Quantity too small for lot range. Min: {expected_full - wtlot}"
+    #                         )
+    #                         return
+    #                 else:
+    #                     if not math.isclose(qty, expected_full, rel_tol=1e-5):
+    #                         self.show_quantity_error(
+    #                             f"Quantity should be exactly {expected_full} for this lot range"
+    #                         )
+    #                         return
+                            
+    #                 # Check if should have excess
+    #                 if not has_excess and not math.isclose(qty, expected_full, rel_tol=1e-5):
+    #                     self.show_quantity_error(
+    #                         f"Quantity suggests excess (expected {expected_full}). Check 'has excess'"
+    #                     )
+    #                     return
+                        
+    #             except (ValueError, IndexError):
+    #                 # Invalid lot format - will be caught by other validators
+    #                 return
+    #         else:
+    #             # Single lot
+    #             if not has_excess and not math.isclose(qty, wtlot, rel_tol=1e-5):
+    #                 self.show_quantity_error(
+    #                     f"Quantity should be exactly {wtlot} for single lot"
+    #                 )
+    #                 return
+                    
+    #         # Clear error if validation passed
+    #         self.form_fields["t_qtykg_error"].setText("")
+    #         self.t_qtykg_input.setStyleSheet("")
+            
+    #     except Exception as e:
+    #         print(f"Validation error: {e}")
+
+    # def validate_lot_quantity(self):
+    #     """Real-time validation of lot quantity proportion (shows warnings instead of errors)"""
+    #     try:
+    #         lot_text = self.t_lotnumberwhole_input.text()
+    #         qty = self.t_qtykg_input.value()
+    #         wtlot = self.t_wtlot_input.value()
+    #         has_excess = self.has_excess_checkbox.isChecked()
+            
+    #         # Clear any existing messages if fields are empty
+    #         if not lot_text or wtlot <= 0:
+    #             self.form_fields["t_qtykg_error"].setText("")
+    #             self.t_qtykg_input.setStyleSheet("")
+    #             return
+                
+    #         if "-" in lot_text:
+    #             try:
+    #                 start, end = lot_text.split("-")
+    #                 start_num = int(start[:4])
+    #                 end_num = int(end[:4])
+    #                 num_lots = (end_num - start_num) + 1
+    #                 expected_full = num_lots * wtlot
+                    
+    #                 if has_excess:
+    #                     if qty < (expected_full - wtlot):
+    #                         self.show_quantity_message(
+    #                             f"⚠️ Warning: Quantity seems low for this lot range (expected ~{expected_full})",
+    #                             is_warning=True
+    #                         )
+    #                         return
+    #                     elif qty > expected_full and not math.isclose(qty % wtlot, 0, abs_tol=1e-5):
+    #                         self.show_quantity_message(
+    #                             "⚠️ Note: Excess should be less than one full lot",
+    #                             is_warning=True
+    #                         )
+    #                         return
+    #                 else:
+    #                     if not math.isclose(qty, expected_full, rel_tol=1e-5, abs_tol=1e-5):
+    #                         self.show_quantity_message(
+    #                             f"💡 Tip: Quantity doesn't match exact lots (expected {expected_full}). "
+    #                             "Consider checking 'has excess' if appropriate",
+    #                             is_warning=True
+    #                         )
+    #                         return
+                            
+    #                 # Clear message if validation passes
+    #                 self.form_fields["t_qtykg_error"].setText("")
+    #                 self.t_qtykg_input.setStyleSheet("")
+    #                 return
+                    
+    #             except (ValueError, IndexError):
+    #                 # Invalid lot format - will be caught by other validators
+    #                 self.show_quantity_message("Invalid lot number format", is_warning=True)
+    #                 return
+    #         else:
+    #             # Single lot
+    #             if not has_excess and not math.isclose(qty, wtlot, rel_tol=1e-5, abs_tol=1e-5):
+    #                 self.show_quantity_message(
+    #                     f"💡 Tip: For single lot, quantity usually matches weight per lot ({wtlot}). "
+    #                     "Check 'has excess' if this is intentional",
+    #                     is_warning=True
+    #                 )
+    #                 return
+                    
+    #             # Clear message if validation passes
+    #             self.form_fields["t_qtykg_error"].setText("")
+    #             self.t_qtykg_input.setStyleSheet("")
+    #             return
+                
+    #     except Exception as e:
+    #         print(f"Validation warning: {e}")
+    #         return
+
     def validate_lot_quantity(self):
         """Real-time validation of lot quantity proportion with strict excess checking"""
         try:
@@ -229,7 +367,7 @@ class EndorsementCreateView(QWidget):
             wtlot = self.t_wtlot_input.value()
             has_excess = self.has_excess_checkbox.isChecked()
             
-            # ------------- Clear any existing messages if fields are empty -----------------
+            # Clear any existing messages if fields are empty
             if not lot_text or wtlot <= 0:
                 self.clear_quantity_error()
                 return
@@ -242,7 +380,7 @@ class EndorsementCreateView(QWidget):
                     num_lots = (end_num - start_num) + 1
                     expected_full = num_lots * wtlot
                     
-                    # ---------- New strict validation -------------
+                    # --- New strict validation ---
                     if not math.isclose(qty, expected_full, rel_tol=1e-5, abs_tol=1e-5):
                         if not has_excess:
                             self.show_quantity_error(
@@ -269,7 +407,7 @@ class EndorsementCreateView(QWidget):
                     self.show_quantity_error("Invalid lot number format")
                     return
             else:
-                # ---------------- Single lot validation ------------------
+                # Single lot validation
                 if not math.isclose(qty, wtlot, rel_tol=1e-5, abs_tol=1e-5):
                     if not has_excess:
                         self.show_quantity_error(
@@ -286,33 +424,64 @@ class EndorsementCreateView(QWidget):
                         )
                         return
             
-            # ----------------- Clear messages if validation passes -----------------------
+            # Clear messages if validation passes
             self.clear_quantity_error()
             
         except Exception as e:
             print(f"Validation error: {e}")
             return
 
+    # OLD CODE (original)
+    # def show_quantity_error(self, message):
+    #     """Helper to display quantity validation error"""
+    #     self.form_fields["t_qtykg_error"].setText(message)
+    #     self.t_qtykg_input.setStyleSheet("border: 1px solid red;")
+    
+    # V2 OLD CODE
+    # def show_quantity_message(self, message, is_warning=False):
+    #     """Helper to display quantity validation message (warning or error)"""
+    #     error_label = self.form_fields["t_qtykg_error"]
+    #     error_label.setText(message)
+
+    #     if is_warning: 
+    #         self.t_qtykg_input.setStyleSheet("""
+    #             border: 1px solid #FFA500;
+    #             background-color: #FFFFE0;
+    #         """
+    #         )
+    #         error_label.setStyleSheet("""
+    #             color: #FF8C00;
+    #             font-style: italic;
+    #             margin-left: 5px;
+    #         """)        
+    #     else:
+    #         self.t_qtykg_input.setStyleSheet("""
+    #             border: 1px solid red;    
+    #         """)
+    #         error_label.setStyleSheet("""
+    #             color: red;
+    #             font-style: italic;
+    #         """)
+
     def show_quantity_error(self, message, require_excess=False):
         """Helper to display quantity validation error"""
         error_label = self.form_fields["t_qtykg_error"]
         error_label.setText(message)
         
-        # ------------- Style the quantity input ------------------
+        # Style the quantity input
         self.t_qtykg_input.setStyleSheet("""
             border: 1px solid red;
             background-color: #FFE0E0;
         """)
         
-        # ------------------- Style the error label -------------------
+        # Style the error label
         error_label.setStyleSheet("""
             color: red;
-            font-size: 12px;
-            font-style: italic;
+            font-weight: bold;
             margin-left: 5px;
         """)
         
-        # ---------------- Highlight the excess checkbox if required ------------------
+        # Highlight the excess checkbox if required
         if require_excess:
             self.has_excess_checkbox.setStyleSheet("""
                 QCheckBox {
@@ -334,21 +503,21 @@ class EndorsementCreateView(QWidget):
     def refresh_table(self):
         """Refresh table data."""
         try:
-            # --------------- Store current scroll position -----------------
+            # Store current scroll position
             scroll_pos = self.table_widget.table.verticalScrollBar().value()
             
             self.table_widget.load_data()
             
-            # ------------- Maintain UI state ----------------
+            # Maintain UI state
             self.table_widget.table.verticalScrollBar().setValue(scroll_pos)
             self.table_widget.table.resizeColumnsToContents()
             
-            # ----------------- Set specific column widths if needed -------------------
+            # Set specific column widths if needed
             self.table_widget.table.setColumnWidth(0, 120)  # Ref No
             self.table_widget.table.setColumnWidth(1, 100)  # Date
             # ... other columns ...
             
-            # ----------------- Ensure last column stretches -------------------
+            # Ensure last column stretches
             self.table_widget.table.horizontalHeader().setStretchLastSection(True)
         except Exception as e:
             print(f"Error refreshing table: {e}")
@@ -356,7 +525,7 @@ class EndorsementCreateView(QWidget):
     def create_input_horizontal_layout(
         self, 
         label_text: str, 
-        widget: Union[QWidget, QLineEdit, QDateEdit], 
+        widget: Union[QWidget, QLineEdit], 
         field_name: str, 
         error_label_name: str
     ) -> None:
@@ -379,7 +548,7 @@ class EndorsementCreateView(QWidget):
         
         self.main_layout.addLayout(horizontal_layout)
     
-    # ---------------- for lot number row ---------------
+    # for lot number row
     def create_lot_number_row(
         self, 
         create_input_row: Callable[[str, Union[QWidget, QLineEdit], str, str], None]
@@ -406,18 +575,18 @@ class EndorsementCreateView(QWidget):
 
         self.t_use_whole_lot_checkbox.stateChanged.connect(toggle_lot_number_mask)
 
-        # ------------- default -------------------
+        # default
         self.t_lotnumberwhole_input.setInputMask("0000AA; ")
         self.t_lotnumberwhole_input.setPlaceholderText("e.g.1234AB or 1234AB-5678CD")
 
-        # ----------------- add the layout to make them inline ---------------------
+        # add the layout to make them inline
         lot_inline_layout = QHBoxLayout()
         lot_inline_layout.setContentsMargins(0, 0, 0, 0)
         lot_inline_layout.setSpacing(15)
         lot_inline_layout.addWidget(self.t_lotnumberwhole_input)
         lot_inline_layout.addWidget(self.t_use_whole_lot_checkbox)
 
-        # --------------- wrapping the whole lot number in one widget -------------------
+        # wrapping the whole lot number in one widget
         lot_input_widget = QWidget()
         lot_input_widget.setLayout(lot_inline_layout)
 
@@ -428,13 +597,12 @@ class EndorsementCreateView(QWidget):
         self, 
         create_input_row: Callable[[str, Union[QWidget, QLineEdit], str, str], None]
     ):
-        # ------------------ self.t_date_endorsed_input = QDateEdit(calendarPopup=True) -------------------
-        self.t_date_endorsed_input = ModifiedDateEdit(calendarPopup=True)
+        self.t_date_endorsed_input = QDateEdit(calendarPopup=True)
         self.t_date_endorsed_input.setDate(QDate.currentDate())
         self.t_date_endorsed_input.setObjectName("endorsement-date-endorsed-input")
 
         create_input_row("Date Endorsed:", self.t_date_endorsed_input, "t_date_endorsed", "t_date_endorsed_error")
-
+    
     def create_t_refno_row(
         self, 
         create_input_row: Callable[[str, Union[QWidget, QLineEdit], str, str], None]
@@ -443,7 +611,7 @@ class EndorsementCreateView(QWidget):
         self.t_refno_input.setObjectName("endorsement-refno-input")
         self.t_refno_input.setDisabled(True)
 
-        # ------------------ Excess checkbox -----------------------
+        # Excess checkbox
         self.has_excess_checkbox = QCheckBox("Has excess")
         self.has_excess_checkbox.setObjectName("endorsement-has-excess-checkbox")
 
@@ -468,7 +636,7 @@ class EndorsementCreateView(QWidget):
         self, 
         create_input_row: Callable[[str, Union[QWidget, QLineEdit], str, str], None]
     ):
-        self.t_category_input = ModifiedComboBox()
+        self.t_category_input = QComboBox()
         
         for category in CategoryEnum:
             self.t_category_input.addItem(category.value, category)
@@ -479,60 +647,50 @@ class EndorsementCreateView(QWidget):
         self, 
         create_input_row: Callable[[str, Union[QWidget, QLineEdit], str, str], None]
     ):
-        self.t_prodcode_input = ModifiedComboBox()
+        self.t_prodcode_input = QComboBox()
         self.t_prodcode_input.addItems([
-            "PlaceholderTest1",
-            "PlaceholderTest2",
-            "PlaceholderTest3"
+            "Placeholder12345",
+            "Placeholder12345",
+            "Placeholder12345"
         ])
 
         create_input_row("Product Code:", self.t_prodcode_input, "t_prodcode", "t_prodcode_error")
     
-    def create_weight_per_lot_row(
-        self, 
-        create_input_row: Callable[[str, Union[QWidget, QLineEdit], str, str], None]
-    ):
-        self.t_wtlot_input = ModifiedDoubleSpinBox()
-        self.t_wtlot_input.setMinimum(0.01) # Pydantic gt=0, so min here can be slightly above 0
-        self.t_wtlot_input.setMaximum(999999999.99)
-        self.t_wtlot_input.setDecimals(2)
-
-        create_input_row("Weight per Lot:", self.t_wtlot_input, "t_wtlot", "t_wtlot_error")
-
     def create_qtykg_row(
         self, 
         create_input_row: Callable[[str, Union[QWidget, QLineEdit], str, str], None]
     ):
-        self.t_qtykg_input = ModifiedDoubleSpinBox()
+        self.t_qtykg_input = QDoubleSpinBox()
         self.t_qtykg_input.setObjectName("endorsement-t-qtykg-input-spinbox")
         self.t_qtykg_input.setMinimum(0.01) # Pydantic gt=0, so min here can be slightly above 0
         self.t_qtykg_input.setMaximum(999999999.99)
         self.t_qtykg_input.setDecimals(2)
 
         create_input_row("Quantity (kg):", self.t_qtykg_input, "t_qtykg", "t_qtykg_error")
-    
-    def create_bag_input_row(
-        self,
+            
+    def create_weight_per_lot_row(
+        self, 
         create_input_row: Callable[[str, Union[QWidget, QLineEdit], str, str], None]
     ):
-        self.t_bag_num_input = QSpinBox()
-        self.t_bag_num_input.setMinimum(0)
-        self.t_bag_num_input.setMaximum(500)
+        self.t_wtlot_input = QDoubleSpinBox()
+        self.t_wtlot_input.setMinimum(0.01) # Pydantic gt=0, so min here can be slightly above 0
+        self.t_wtlot_input.setMaximum(999999999.99)
+        self.t_wtlot_input.setDecimals(2)
 
-        create_input_row("Bag number:", self.t_bag_num_input, "t_bag_num", "t_bag_num_error")
+        create_input_row("Weight per Lot:", self.t_wtlot_input, "t_wtlot", "t_wtlot_error")
 
     def create_status_row(
         self, 
         create_input_row: Callable[[str, Union[QWidget, QLineEdit], str, str], None]
     ):
-        self.t_status_input = ModifiedComboBox()
+        self.t_status_input = QComboBox()
         self.t_status_input.setObjectName("endorsement-create-status-input")
 
         for status in StatusEnum:
             self.t_status_input.addItem(status.value, status)
 
         self.t_status_input.setCurrentText(StatusEnum.PASSED.value)
-        #  ---------------------- disable the status so that the user cannot change the combox box value ---------------------
+        # disable the status so that the user cannot change the combox box value
         self.t_status_input.setDisabled(True)
         create_input_row("Status:", self.t_status_input, "t_status", "t_status_error")
 
@@ -540,8 +698,9 @@ class EndorsementCreateView(QWidget):
         self, 
         create_input_row: Callable[[str, Union[QWidget, QLineEdit], str, str], None]
     ):
-        self.t_endorsed_by_input = ModifiedComboBox()
+        self.t_endorsed_by_input = QComboBox()
         
+        # create the session here now
         session = self.Session()
 
         try:
@@ -561,7 +720,7 @@ class EndorsementCreateView(QWidget):
         self,
         create_input_row: Callable[[str, Union[QWidget, QLineEdit], str, str], None]
     ):
-        self.t_remarks_by_input = ModifiedComboBox()
+        self.t_remarks_by_input = QComboBox()
         
         for remark in RemarksEnum:
             self.t_remarks_by_input.addItem(remark.value, remark)
@@ -581,37 +740,47 @@ class EndorsementCreateView(QWidget):
             "t_wtlot": self.t_wtlot_input.value(),
             "t_status": self.t_status_input.currentData(), # Retrieves the stored Enum object
             "t_endorsed_by": self.t_endorsed_by_input.currentText(),
-            "t_has_excess": self.has_excess_checkbox.isChecked(),
-            "t_bag_num": self.t_bag_num_input.value()
+            "t_has_excess": self.has_excess_checkbox.isChecked()
         }
 
     def clear_error_messages(self):
         """Clears all displayed error messages."""
-        valid_instance = (
-            QLineEdit,
-            QComboBox,
-            QDateEdit,
-            QDoubleSpinBox,
-            ModifiedComboBox,
-            ModifiedDateEdit,
-            ModifiedDoubleSpinBox,
-        )
-
         for key in self.form_fields:
             if key.endswith("_error"):
                 self.form_fields[key].setText("")
                 # Optionally reset styling
                 field_name = key.replace("_error", "")
                 
-                if field_name in self.form_fields and isinstance(self.form_fields[field_name], valid_instance):
+                if field_name in self.form_fields and isinstance(self.form_fields[field_name], (QLineEdit, QComboBox, QDateEdit, QDoubleSpinBox)):
                     self.form_fields[field_name].setStyleSheet("") # Clear any red borders etc.
+
+    # def display_errors(self, errors):
+    #     """Displays validation errors next to the corresponding fields."""
+    #     self.clear_error_messages() # Clear previous errors first
+
+    #     for error in errors:
+    #         field = error["loc"][0] # 'loc' is a tuple, first element is the field name
+    #         message = error["msg"]
+            
+    #         error_label_key = f"{field}_error"
+            
+    #         if error_label_key in self.form_fields:
+    #             self.form_fields[error_label_key].setText(message)
+                
+    #             # Optionally, highlight the input field itself
+    #             input_widget = self.form_fields.get(field)
+                
+    #             if input_widget:
+    #                 input_widget.setStyleSheet("border: 1px solid red;")
+    #         else:
+    #             print(f"Warning: No error label found for field '{field}'. Error: {message}")
 
     def display_errors(self, errors):
         """Displays validation errors next to the corresponding fields."""
         self.clear_error_messages()  # Clear previous errors first
 
         for error in errors:
-            # ---------------- Handle both field-specific and model-level errors --------------------
+            # Handle both field-specific and model-level errors
             if error["loc"]:
                 field = error["loc"][0]  # 'loc' is a tuple, first element is the field name
                 message = error["msg"]
@@ -621,7 +790,7 @@ class EndorsementCreateView(QWidget):
                 if error_label_key in self.form_fields:
                     self.form_fields[error_label_key].setText(message)
                     
-                    # ------------- Optionally, highlight the input field itself ----------------
+                    # Optionally, highlight the input field itself
                     input_widget = self.form_fields.get(field)
                     
                     if input_widget:
@@ -629,7 +798,7 @@ class EndorsementCreateView(QWidget):
                 else:
                     print(f"Warning: No error label found for field '{field}'. Error: {message}")
             else:
-                # -------------- Model-level error - show it in a general way (e.g., in quantity field) -------------
+                # Model-level error - show it in a general way (e.g., in quantity field)
                 message = error["msg"]
 
                 if "Quantity" in message:
@@ -648,35 +817,11 @@ class EndorsementCreateView(QWidget):
             # start the session here
             session = self.Session()
 
-            # -------------------Validate the data using your Pydantic schema ---------------------
+            # Validate the data using your Pydantic schema
             validated_data = EndorsementFormSchema(**form_data)
-            
-            # --------------------------------------------------------------------------
-            # before passing the validated form in the endorsement model check first if the data is already existing on the database
-            
-            is_lot_existing = session.query(EndorsementModel).filter(
-                EndorsementModel.t_lotnumberwhole == validated_data.t_lotnumberwhole
-            ).first()
-
-            if is_lot_existing:
-                print(True)
-                # prompt the user that an item is already existing on the database.
-                # enforce the user to just only change weight per lot 
-
-                # TODO: 
-                # CREATE A MESSAGE BOX TELLING THE EXISTING DATA ON THE USER
-                # CREATE A FUNCTION HERE THAT OMITS THE WHOLE ENTRY AND JUST UPDATE THE t_qtykg on the endorsement table 1
-                # CREATE A BAG NUMBER MODEL IN THE DATABASE
-                
-            else:
-                print(False)
-
-
-        
-            # --------------------------------------------------------------------------
 
             # print(validated_data.model_dump_json(indent=2)) 
-            # ------------- if the form is valid store this in the database. ---------------------
+            # if the form is valid store this in the database.
             endorsement = EndorsementModel(**validated_data.model_dump())
                 
             populate_endorsement_items(
@@ -690,7 +835,7 @@ class EndorsementCreateView(QWidget):
 
             session.add(endorsement)
             
-            # ---------------- commit the changes if all transaction in the try block is valid ----------------
+            # commit the changes if all transaction in the try block is valid
             session.commit()
         except ValidationError as e:            
             self.display_errors(e.errors())
@@ -729,47 +874,49 @@ class EndorsementCreateView(QWidget):
             self.refresh_table()
         finally:
             session.close()
-
-    def show_lot_exists_warning(self):
-        pass
-
+ 
     def clear_form(self):
         """Resets the input fields to their initial state."""
-        # -------------- Clear reference number ---------------
+        # Clear reference number
         self.t_refno_input.clear()
         
-        # --------------- Reset date to current date ----------------
+        # Reset date to current date
         self.t_date_endorsed_input.setDate(QDate.currentDate())
         
-        # --------------- Reset category -----------------
+        # Reset category
         self.t_category_input.setCurrentIndex(0)
         
-        # ------------- Clear product code ----------------
+        # Clear product code
         self.t_prodcode_input.clearEditText()
         
-        # ------------ Properly clear lot number field -------------
+        # Properly clear lot number field
         self.t_lotnumberwhole_input.clear()  # This will use our overridden clear()
         self.t_use_whole_lot_checkbox.setChecked(False)  # Reset checkbox
         
-        # ------------ Reset quantity and weight ---------------
+        # Reset quantity and weight
         self.t_qtykg_input.setValue(0.01)
         self.t_wtlot_input.setValue(0.01)
         
-        # ------------ Reset status ------------------
+        # Reset status
         self.t_status_input.setCurrentText(StatusEnum.PASSED.value)
         self.t_status_input.setDisabled(True)
         
-        # ---------- Clear endorsed by ----------
+        # Clear endorsed by
         self.t_endorsed_by_input.clearEditText()
         
-        # ------------ Clear error messages ---------------
+        # Clear error messages
         self.clear_error_messages()
 
     def apply_styles(self):
         qss_style = os.path.join(os.path.dirname(__file__), "styles", "endorsement.css")
         button_cursor_pointer(self.save_button)
         
-        load_styles(qss_style, self)
+        try:
+            with open(qss_style, "r") as f:
+                self.setStyleSheet(f.read())
+        except FileNotFoundError:
+            print("Warning: Style file not found. Default styles will be used.")
+
 class EndorsementListView(QWidget):
     """View with filters and table"""
     def __init__(self, session_factory: Callable[..., Session], parent=None):
@@ -786,7 +933,7 @@ class EndorsementListView(QWidget):
         top_filter_layout, bottom_filter_layout = self.create_filter_layout()
         self.table = self.show_table()
 
-        # ------------- Add all to main layout ----------------
+        # Add all to main layout
         layout.addLayout(top_filter_layout)
         layout.addLayout(bottom_filter_layout)
         layout.addWidget(self.table)
@@ -795,18 +942,14 @@ class EndorsementListView(QWidget):
         self.create_category_menu()
         self.setLayout(layout)
 
-        # connect the button to filter function
-        self.search_button.clicked.connect(self.filter_function)
-        self.list_reset_btn.clicked.connect(self.list_reset_callback)
-        
-        # Connect returnPressed signals for quick filtering
-        self.ref_no_input.returnPressed.connect(self.filter_function)
-        self.prod_code_input.returnPressed.connect(self.filter_function)
-
     def apply_styles(self):
         qss_path = os.path.join(os.path.dirname(__file__), "styles", "endorsement_list.css")
 
-        load_styles(qss_path, self)
+        try:
+            with open(qss_path, "r") as f:
+                self.setStyleSheet(f.read())
+        except FileNotFoundError:
+            print("Warning: Style file not found. Default styles will be used.")
     
     def show_table(self):
         table = TableWidget(
@@ -821,35 +964,15 @@ class EndorsementListView(QWidget):
     def create_category_menu(self):
         for category in CategoryEnum:
             self.category_filter.addItem(category.value, category)
-        
-        # add a ALL filter in the category enum
-        self.category_filter.addItem("ALL")
-        self.category_filter.setCurrentText("ALL")
 
     def create_filter_layout(self):
-        def create_filter_group(label, widget):
-            group = QWidget()
-            layout = QVBoxLayout(group)
-            layout.setContentsMargins(0, 0, 0, 0)
-            layout.setSpacing(2)
-            layout.addWidget(label)
-            layout.addWidget(widget)
-            
-            return group
-        # ------------- FILTERS ----------------
-        self.category_filter = ModifiedComboBox()
-        self.status_filter = ModifiedComboBox()
+        # FILTERS
+        self.category_filter = QComboBox()
+        self.status_filter = QComboBox()
         self.prod_code_input = QLineEdit()
         self.ref_no_input = QLineEdit()
 
-        self.prod_code_input.setPlaceholderText("Filter by production code")
-        self.ref_no_input.setPlaceholderText("Filter by reference number")
-
-        # ------------ RESET BTN ----------------
-        self.list_reset_btn = QPushButton("Reset")
-        self.list_reset_btn.setObjectName("endorsementList-reset-btn")
-
-        # --------------- LABELS FOR THE FILTERS ---------------------
+        # LABELS FOR THE FILTERS
         category_label = QLabel("Category:")
         status_label = QLabel("Status:")
         prod_code_label = QLabel("Prod Code:")
@@ -857,12 +980,11 @@ class EndorsementListView(QWidget):
         from_label = QLabel("From:")
         to_label = QLabel("To:")
 
-        # --------------- DATES ---------------------
-        self.date_from = ModifiedDateEdit(calendarPopup=True)
-        self.date_to = ModifiedDateEdit(calendarPopup=True)
-        self.date_to.setDate(QDate.currentDate())
+        # DATES
+        self.date_from = QDateEdit(calendarPopup=True)
+        self.date_to = QDateEdit(calendarPopup=True)
 
-        # --------------- QPushButton -------------------
+        # QPushButton
         self.search_button = QPushButton("Search")
         self.search_button.setObjectName("endorsementList-search-btn")
 
@@ -876,7 +998,7 @@ class EndorsementListView(QWidget):
         bottom_filter_layout.setContentsMargins(0, 0, 0, 0)
         bottom_filter_layout.setSpacing(6)
         
-        # --------------- SIZE POLICY --------------------
+        # SIZE POLICY
         category_label.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
         status_label.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
         prod_code_label.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
@@ -885,10 +1007,15 @@ class EndorsementListView(QWidget):
         to_label.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
 
         # --- Top row add widget ---
-        top_filter_layout.addWidget(create_filter_group(category_label, self.category_filter), stretch=1)
-        top_filter_layout.addWidget(create_filter_group(status_label, self.status_filter), stretch=1)
-        top_filter_layout.addWidget(create_filter_group(prod_code_label, self.prod_code_input), stretch=1)
-        top_filter_layout.addWidget(create_filter_group(ref_no_label, self.ref_no_input), stretch=1)
+        top_filter_layout.addWidget(category_label)
+        top_filter_layout.addWidget(self.category_filter)
+        top_filter_layout.addWidget(status_label)
+        top_filter_layout.addWidget(self.status_filter)
+        top_filter_layout.addWidget(prod_code_label)
+        top_filter_layout.addWidget(self.prod_code_input)
+        top_filter_layout.addWidget(ref_no_label)
+        top_filter_layout.addWidget(self.ref_no_input)
+        top_filter_layout.addStretch() # PUSH ITEMS TO THE LEFT
 
         # --- Bottom row filter layout ---
         bottom_filter_layout.addWidget(from_label)
@@ -896,7 +1023,6 @@ class EndorsementListView(QWidget):
         bottom_filter_layout.addWidget(to_label)
         bottom_filter_layout.addWidget(self.date_to)
         bottom_filter_layout.addStretch() # push the search button to the right
-        bottom_filter_layout.addWidget(self.list_reset_btn)
         bottom_filter_layout.addWidget(self.search_button)
 
         return (
@@ -904,50 +1030,15 @@ class EndorsementListView(QWidget):
             bottom_filter_layout
         )
     
+    # TODO
     def filter_function(self):
-        session = self.Session()
+        session = self.Session
 
         try:
-            ref_no_filter = self.ref_no_input.text().strip()
-            prod_code_filter = self.prod_code_input.text().strip()
-
-            query = session.query(EndorsementCombinedView)
-
-            if ref_no_filter:
-                query = query.filter(EndorsementCombinedView.t_refno.ilike(f"%{ref_no_filter}%"))
-            
-            if prod_code_filter:
-                query = query.filter(EndorsementCombinedView.t_prodcode.ilike(f"%{prod_code_filter}%"))
-
-            if self.date_from.date() <= self.date_to.date():
-                query = query.filter(
-                    EndorsementCombinedView.t_date_endorsed >= self.date_from.date().toPyDate(),
-                    EndorsementCombinedView.t_date_endorsed <= self.date_to.date().toPyDate()
-                )
-            
-            if self.category_filter.currentText() != "ALL":
-                selected_category = self.category_filter.currentData()
-
-                if selected_category:  # Ensure we have valid category data
-                    query = query.filter(EndorsementCombinedView.t_category == selected_category.value)
-            
-            results = query.order_by(EndorsementCombinedView.t_date_endorsed.desc()).all()
-
-            self.table.update_table_with_results(results, apply_pagination=True)
+            # filtered_query = session.query(EndorsementModel).join
+            pass
         finally:
             session.close()
-
-    def list_reset_callback(self):
-        filter_objects = (
-            self.prod_code_input,
-            self.ref_no_input
-        )
-        
-        for input_widget in filter_objects:
-            if isinstance(input_widget, QLineEdit):
-                input_widget.clear()
-             
-        self.table.load_data()
 
 class EndorsementMainView(QWidget):
     def __init__(self, session_factory: Callable[..., Session], parent=None):
@@ -959,41 +1050,34 @@ class EndorsementMainView(QWidget):
     def setup_ui(self):
         self.layout = QVBoxLayout()
 
-        # ----------------- Navigation buttons ---------------------
+        # Navigation buttons
         nav_layout = QHBoxLayout()
         self.create_btn = QPushButton("Create New")
         self.list_btn = QPushButton("View List")
-        self.how_to_use_btn = QPushButton("How To Use")
-        
         self.create_btn.setObjectName("endorsement-create-btn")
         self.list_btn.setObjectName("endorsement-list-btn")
-        self.how_to_use_btn.setObjectName("endorsement-how-to-use-btn")
         
         nav_layout.addWidget(self.create_btn)
         nav_layout.addWidget(self.list_btn)
-        nav_layout.addWidget(self.how_to_use_btn)
         nav_layout.addStretch()
         
-        # ---------------- Stacked widget for views ---------------------
+        # Stacked widget for views
         self.stacked_widget = QStackedWidget()
         
-        # --------------- Create views -----------------------
+        # Create views
         self.create_view = EndorsementCreateView(self.Session)
         self.list_view = EndorsementListView(self.Session)
-        self.how_to_use_view = HowToUseView()
         
-        # ---------------- Add to stack --------------------
+        # Add to stack
         self.stacked_widget.addWidget(self.create_view)
         self.stacked_widget.addWidget(self.list_view)
-        self.stacked_widget.addWidget(self.how_to_use_view)
 
-        # --------------------- Connect signals -----------------------
+        # Connect signals
         self.create_btn.clicked.connect(lambda: self.stacked_widget.setCurrentWidget(self.create_view))
         self.list_btn.clicked.connect(lambda: self.stacked_widget.setCurrentWidget(self.list_view))
-        self.how_to_use_btn.clicked.connect(lambda: self.stacked_widget.setCurrentWidget(self.how_to_use_view))
         
-        # ----------------------- When a record is selected in list view for editing -------------------------------
-        # self.list_view.table.double_clicked.connect(self.show_update_view)
+        # When a record is selected in list view for editing
+        self.list_view.table.double_clicked.connect(self.show_update_view)
         
         self.layout.addLayout(nav_layout)
         self.layout.addWidget(self.stacked_widget)
@@ -1002,7 +1086,11 @@ class EndorsementMainView(QWidget):
     def apply_styles(self):
         qss_path = os.path.join(os.path.dirname(__file__), "styles", "crud_btn.css")
         
-        load_styles(qss_path, self)
+        try:
+            with open(qss_path, "r") as f:
+                self.setStyleSheet(f.read())
+        except FileNotFoundError:
+            print("Warning: Style file not found. Default styles will be used.")
 
     def show_update_view(self, ref_no):
         """Load data for editing and switch to update view"""
@@ -1016,146 +1104,4 @@ class EndorsementMainView(QWidget):
                 self.stacked_widget.setCurrentWidget(self.update_view)
         finally:
             session.close()
-
-
-# HOW TO USE VIEW
-class HowToUseView(QWidget):
-    """Interactive guide for using the endorsement system"""
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setup_ui()
-        self.apply_styles()
-
-    def setup_ui(self):
-        # Main layout with scroll area
-        main_layout = QVBoxLayout(self)
-        scroll_area = QScrollArea()
-        scroll_area.setWidgetResizable(True)
-        
-        # Content container
-        content = QWidget()
-        layout = QVBoxLayout(content)
-        layout.setAlignment(Qt.AlignmentFlag.AlignTop)
-        layout.setSpacing(20)
-        layout.setContentsMargins(20, 20, 20, 20)
-
-        # Title
-        title = QLabel("Endorsement System Guide")
-        title.setStyleSheet("font-size: 18px; font-weight: bold;")
-        layout.addWidget(title)
-
-        # Sections
-        self.add_section(
-            layout,
-            "Creating New Endorsements",
-            "1. Fill all required fields\n"
-            "2. Use proper lot number format (e.g., 1234AB or 1234AB-5678CD)\n"
-            "3. Check 'Has excess' for partial quantities\n"
-            "4. Click 'Save Endorsement' to submit"
-        )
-
-        self.add_section(
-            layout,
-            "Viewing Existing Records",
-            "• Use filters to find specific endorsements\n"
-            "• Double-click any record to view details\n"
-            "• Sort columns by clicking headers"
-        )
-
-        self.add_section(
-            layout,
-            "Common Validation Rules",
-            "• Quantity must match whole lot multiples unless 'Has excess' is checked\n"
-            "• Lot numbers must follow the pattern: 4 digits + 2 letters\n"
-            "• Reference numbers are auto-generated"
-        )
-
-        self.add_video_section(layout)
-        self.add_contact_section(layout)
-
-        scroll_area.setWidget(content)
-        main_layout.addWidget(scroll_area)
-
-    def add_section(self, layout, title, content):
-        """Adds a titled content section"""
-        section_title = QLabel(title)
-        section_title.setStyleSheet("font-size: 14px; font-weight: bold; margin-top: 10px;")
-        
-        content_label = QLabel(content)
-        content_label.setWordWrap(True)
-        content_label.setStyleSheet("margin-left: 10px;")
-        
-        layout.addWidget(section_title)
-        layout.addWidget(content_label)
-
-    def add_video_section(self, layout):
-        """Adds video tutorial placeholder"""
-        section = QWidget()
-        section_layout = QVBoxLayout(section)
-        
-        title = QLabel("Video Tutorials")
-        title.setStyleSheet("font-size: 14px; font-weight: bold; margin-top: 10px;")
-        
-        video_links = [
-            ("Basic Endorsement", "https://example.com/video1"),
-            ("Troubleshooting", "https://example.com/video2"),
-            ("Advanced Features", "https://example.com/video3")
-        ]
-        
-        for text, url in video_links:
-            btn = QPushButton(f"▶ {text}")
-            btn.setCursor(Qt.CursorShape.PointingHandCursor)
-            btn.setStyleSheet("text-align: left; color: #0066cc;")
-            btn.clicked.connect(lambda _, u=url: self.open_url(u))
-            section_layout.addWidget(btn)
-        
-        layout.addWidget(title)
-        layout.addWidget(section)
-
-    def add_contact_section(self, layout):
-        """Adds support contact information"""
-        section = QWidget()
-        section_layout = QVBoxLayout(section)
-        
-        title = QLabel("Need Help?")
-        title.setStyleSheet("font-size: 14px; font-weight: bold; margin-top: 10px;")
-        
-        contacts = [
-            ("IT Support:", "support@masterbatch.com", "mailto:support@example.com"),
-            ("QC Department:", "qc@masterbatch.com", "mailto:qc@example.com"),
-            ("Urgent Issues:", "Ext. 1234", "")
-        ]
-        
-        for label, text, link in contacts:
-            row = QWidget()
-            row_layout = QHBoxLayout(row)
-            row_layout.setContentsMargins(10, 0, 0, 0)
-            
-            lbl = QLabel(label)
-            lbl.setFixedWidth(100)
-            
-            if link:
-                btn = QPushButton(text)
-                btn.setCursor(Qt.CursorShape.PointingHandCursor)
-                btn.setStyleSheet("text-align: left; color: #0066cc; border: none;")
-                btn.clicked.connect(lambda _, u=link: self.open_url(u))
-                row_layout.addWidget(lbl)
-                row_layout.addWidget(btn)
-            else:
-                txt = QLabel(text)
-                row_layout.addWidget(lbl)
-                row_layout.addWidget(txt)
-            
-            section_layout.addWidget(row)
-        
-        layout.addWidget(title)
-        layout.addWidget(section)
-
-    def open_url(self, url):
-        """Handles opening external links"""
-        import webbrowser
-        webbrowser.open(url)
-
-    def apply_styles(self):
-        qss_path = os.path.join(os.path.dirname(__file__), "styles", "how_to_use_view.css")
-        load_styles(qss_path, self)
+    

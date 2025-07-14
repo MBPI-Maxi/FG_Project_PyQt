@@ -1,6 +1,7 @@
 # A CUSTOM LINE EDITS
 from PyQt6.QtWidgets import QLineEdit
 from PyQt6.QtGui import QMouseEvent
+from typing import override
 
 class LotNumberLineEdit(QLineEdit):
     def __init__(self, parent=None):
@@ -8,6 +9,7 @@ class LotNumberLineEdit(QLineEdit):
         # Removed the NoSpaceValidator since input mask handles formatting
         self.setMaxLength(11)
     
+    @override
     def keyPressEvent(self, event):
         if event.text().isalpha():
             upper_char = event.text().upper()
@@ -15,6 +17,7 @@ class LotNumberLineEdit(QLineEdit):
         else:
             super().keyPressEvent(event)
 
+    @override
     def mousePressEvent(self, event: QMouseEvent):
         super().mousePressEvent(event)
 
@@ -22,6 +25,8 @@ class LotNumberLineEdit(QLineEdit):
             self.setCursorPosition(0)
         else:
             self.setCursorPosition(len(self.text()))
+    
+    @override
     def clear(self):
         """Override clear to properly handle input mask"""
         self.setInputMask("")  # Remove mask temporarily

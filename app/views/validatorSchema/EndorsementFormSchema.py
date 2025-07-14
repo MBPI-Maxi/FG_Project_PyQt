@@ -1,7 +1,10 @@
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from datetime import date
 from constants.Enums import StatusEnum, CategoryEnum
+from typing import Optional
 import re
+import math
+
 
 # --- FORM SCHEMA IS CREATED HERE FOR SERIALIZATION AND VALIDATION ---
 class EndorsementFormSchema(BaseModel):
@@ -59,6 +62,15 @@ class EndorsementFormSchema(BaseModel):
         max_length=255, 
         description="Endorsed By"
     )
+    t_has_excess: bool = Field(
+        False,
+        description="User's input for 'has excess' checkbox"
+    )
+    t_bag_num: Optional[int] = Field(
+        None,
+        ge=0,
+        description="Number of bags (optional)"
+    )
 
     class Config:
         # Ensures that Pydantic works correctly with Enum values
@@ -84,6 +96,22 @@ class EndorsementFormSchema(BaseModel):
         
         return value
     
+    @field_validator("t_bag_num", mode="before")
+    @classmethod
+    def validate_t_bag_num(cls, value):
+        if value == 0:
+            return None
+        
+        try:
+            int_value = int(value)
+            
+            if int_value <= 0:
+                raise ValueError("Bag number must be a positive integer")
+            
+            return int_value
+        except ValueError:
+            raise ValueError("Bag number must be a positive integer")
+
     @field_validator("t_lotnumberwhole")
     @classmethod
     def validate_lot_number(cls, value):
@@ -129,4 +157,65 @@ class EndorsementFormSchema(BaseModel):
             return value
         else:
             raise ValueError("Lot number format must be '1234AB' or '1234AB-1235AB'")
+    
+    #     return self
+    @model_validator(mode="after")
+    def validate_lot_quantity_proportion(self):
+        if "-" in self.t_lotnumberwhole:
+            # For range lot numbers
+            start, end = self.t_lotnumberwhole.split("-")
+            start_num = int(start[:4])
+            end_num = int(end[:4])
+            
+            # Calculate number of lots
+            num_lots = (end_num - start_num) + 1
+            
+            # Calculate expected quantity
+            expected_full_quantity = num_lots * self.t_wtlot
+            
+            if self.t_has_excess:
+                # With excess, quantity must be >= expected_full_quantity - wtlot (since last can be partial)
+                if self.t_qtykg < (expected_full_quantity - self.t_wtlot):
+                    raise ValueError(
+                        f"Quantity ({self.t_qtykg}) is too small for lot range {self.t_lotnumberwhole}. "
+                        f"Minimum expected with excess: {expected_full_quantity - self.t_wtlot}"
+                    )
+                
+                # Also check if quantity is more than full lots (must have excess)
+                if self.t_qtykg > expected_full_quantity:
+                    if not math.isclose(self.t_qtykg % self.t_wtlot, 0, abs_tol=1e-5):
+                        raise ValueError(
+                            f"Quantity ({self.t_qtykg}) exceeds full lots ({expected_full_quantity}) but "
+                            "the excess isn't a proper partial lot."
+                        )
+            else:
+                # Without excess, quantity must exactly match (with floating point tolerance)
+                if not math.isclose(self.t_qtykg, expected_full_quantity, rel_tol=1e-5, abs_tol=1e-5):
+                    raise ValueError(
+                        f"Quantity ({self.t_qtykg}) doesn't match lot range {self.t_lotnumberwhole}. "
+                        f"Expected exactly: {expected_full_quantity} (or check 'has excess')"
+                    )
+        else:
+            # For single lot numbers
+            if not self.t_has_excess and not math.isclose(self.t_qtykg, self.t_wtlot, rel_tol=1e-5, abs_tol=1e-5):
+                raise ValueError(
+                    f"Quantity ({self.t_qtykg}) doesn't match single lot weight ({self.t_wtlot}). "
+                    "Either enable 'has excess' or set quantity equal to weight per lot."
+                )
+        
+        # Check if has_excess should be checked based on quantity
+        if "-" in self.t_lotnumberwhole and not self.t_has_excess:
+            start, end = self.t_lotnumberwhole.split("-")
+            start_num = int(start[:4])
+            end_num = int(end[:4])
+            num_lots = (end_num - start_num) + 1
+            expected_full_quantity = num_lots * self.t_wtlot
+            
+            if not math.isclose(self.t_qtykg, expected_full_quantity, rel_tol=1e-5, abs_tol=1e-5):
+                raise ValueError(
+                    f"Quantity ({self.t_qtykg}) suggests there should be excess (expected {expected_full_quantity}). "
+                    "Please check the 'has excess' checkbox."
+                )
+        
+        return self
     ###################################################################

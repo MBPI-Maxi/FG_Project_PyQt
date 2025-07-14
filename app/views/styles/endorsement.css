@@ -25,19 +25,6 @@
     font-style: italic;
 }
 
-QLabel {
-    font-weight: 600;
-    font-size: 14px;
-    color: #333;
-}
-
-/* endorsement form */
-QWidget#EndorsementForm {
-    background-color: #f5f7fa;
-    border-radius: 10px;
-    padding: 20px;
-}
-
 QLineEdit, 
 QDateEdit, 
 QComboBox {
@@ -59,9 +46,29 @@ QComboBox:focus
     selection-color: white;
 }
 
+QLabel {
+    font-weight: 600;
+    font-size: 14px;
+    color: #333;
+}
+
+/* endorsement form */
+QWidget#EndorsementForm {
+    background-color: #f5f7fa;
+    border-radius: 10px;
+    padding: 20px;
+}
+
 QDoubleSpinBox {
     background-color: white;
     color: black;
+}
+
+QDoubleSpinBox {
+    background-color: white;
+    color: black;
+    padding: 6px;
+    font-size: 14px;
 }
 
 /* combobox dropdown display */
@@ -73,13 +80,10 @@ QComboBox QAbstractItemView {
     font-size: 14px;
 }
 
-QDoubleSpinBox {
-    background-color: white;
-    color: black;
-    padding: 6px;
-    font-size: 14px;
+QComboBox#endorsement-create-status-input:disabled {
+    color: grey;
+    background-color: #f0f0f0;
 }
-
 
 /* this is for the calendar widget */
 QDateEdit#endorsement-date-endorsed-input QCalendarWidget QToolButton {
@@ -107,3 +111,4 @@ QDateEdit#endorsement-date-endorsed-input QCalendarWidget QAbstractItemView:enab
     selection-background-color: #3a9eea;
     selection-color: white;
 }
+

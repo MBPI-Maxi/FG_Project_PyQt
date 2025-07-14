@@ -23,7 +23,7 @@ from models import User, AuthLog
 from app.auth.registration import Registration
 
 # helpers
-from app.helpers import button_cursor_pointer, record_auth_log
+from app.helpers import button_cursor_pointer, record_auth_log, load_styles
 
 # super password
 from constants.Enums import ITCredentials, AuthLogStatus
@@ -140,11 +140,7 @@ class LoginForm(QWidget):
         button_cursor_pointer(self.create_user_button)
         qss_path = os.path.join(os.path.dirname(__file__), "styles", "login.css")
         
-        try:
-            with open(qss_path, "r") as f:
-                self.setStyleSheet(f.read())
-        except FileNotFoundError:
-            print("Warning: Style file not found. Default styles will be used.")
+        load_styles(qss_path, self)
 
     def connect_signals(self):
         """
