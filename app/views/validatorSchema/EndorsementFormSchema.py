@@ -1,7 +1,9 @@
-from pydantic import BaseModel, Field, field_validator, model_validator
-from datetime import date
 from constants.Enums import StatusEnum, CategoryEnum
-from typing import Optional
+from datetime import date
+from pydantic import BaseModel, Field, field_validator, model_validator
+from typing import Optional, Type
+from sqlalchemy.orm import Session
+from models import EndorsementModel
 import re
 import math
 
@@ -71,10 +73,26 @@ class EndorsementFormSchema(BaseModel):
         ge=0,
         description="Number of bags (optional)"
     )
-
+    # --------- CUSTOM CONFIGURATION ----------
     class Config:
         # Ensures that Pydantic works correctly with Enum values
         use_enum_values = True 
+    # ----------------------------------------
+
+    _db_session = None
+
+    @classmethod
+    def set_db_session(cls, session: Type[Session]):
+        cls._db_session = session
+    
+    @classmethod
+    def validate_with_session(cls, data: dict, session: Session):
+        """Helper method to validate with a database session"""
+        try:
+            cls.set_db_session(session)
+            return cls(**data)
+        finally:
+            cls.set_db_session(None)
 
     ### VALIDATORS ###
     #####################################################################
@@ -215,6 +233,62 @@ class EndorsementFormSchema(BaseModel):
                 raise ValueError(
                     f"Quantity ({self.t_qtykg}) suggests there should be excess (expected {expected_full_quantity}). "
                     "Please check the 'has excess' checkbox."
+                )
+        
+        return self
+
+    @model_validator(mode="after")
+    def validate_no_overlapping_lots(self):
+        if self._db_session is None:
+            return self  # Skip validation if no session
+                
+        if not hasattr(self, 't_lotnumberwhole') or not self.t_lotnumberwhole:
+            return self
+                
+        if not hasattr(self, 't_prodcode') or not self.t_prodcode:
+            return self
+            
+        # Get all lots for this product
+        existing_lots = self._db_session.query(EndorsementModel.t_lotnumberwhole).filter(
+            EndorsementModel.t_prodcode == self.t_prodcode,
+            EndorsementModel.is_deleted == False,
+            EndorsementModel.t_lotnumberwhole != self.t_lotnumberwhole  # Exclude self for updates
+        ).all()
+        
+        existing_lots = [lot[0] for lot in existing_lots]
+        
+        # Parse the new lot range
+        if "-" in self.t_lotnumberwhole:
+            new_start, new_end = self.t_lotnumberwhole.split("-")
+            new_start_num = int(new_start[:4])
+            new_start_suffix = new_start[4:]
+            new_end_num = int(new_end[:4])
+            new_end_suffix = new_end[4:]
+        else:
+            new_start_num = new_end_num = int(self.t_lotnumberwhole[:4])
+            new_start_suffix = new_end_suffix = self.t_lotnumberwhole[4:]
+        
+        for existing_lot in existing_lots:
+            # Parse existing lot range
+            if "-" in existing_lot:
+                existing_start, existing_end = existing_lot.split("-")
+                existing_start_num = int(existing_start[:4])
+                existing_start_suffix = existing_start[4:]
+                existing_end_num = int(existing_end[:4])
+                existing_end_suffix = existing_end[4:]
+            else:
+                existing_start_num = existing_end_num = int(existing_lot[:4])
+                existing_start_suffix = existing_end_suffix = existing_lot[4:]
+            
+            # Check if suffixes match
+            if new_start_suffix != existing_start_suffix:
+                continue
+                
+            # Check for numeric overlap
+            if (new_start_num <= existing_end_num) and (new_end_num >= existing_start_num):
+                raise ValueError(
+                    f"Lot range {self.t_lotnumberwhole} overlaps with existing lot {existing_lot}. With prod code: {self.t_prodcode} "
+                    "Please use a non-overlapping range."
                 )
         
         return self

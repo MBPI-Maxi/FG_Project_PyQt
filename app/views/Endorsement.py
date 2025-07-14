@@ -9,7 +9,8 @@ from app.helpers import (
     fetch_current_t_refno_in_endorsement,
     populate_endorsement_items,
     button_cursor_pointer,
-    load_styles
+    load_styles,
+    insert_existing_lot_t2
 ) 
 
 from PyQt6.QtCore import QDate, Qt
@@ -19,7 +20,7 @@ from typing import Union, Callable, Type
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 
-from app.StyledMessage import StyledMessageBox
+from app.StyledMessage import StyledMessageBox, TerminalCustomStylePrint
 from constants.Enums import StatusEnum, CategoryEnum, RemarksEnum
 from constants.mapped_user import mapped_user_to_display
 
@@ -44,6 +45,10 @@ from app.widgets import (
 # ENDORSEMENT SCHEMA
 from app.views.validatorSchema import EndorsementFormSchema
 
+from enum import Enum
+
+import datetime
+import json
 import os
 import math
 
@@ -570,7 +575,10 @@ class EndorsementCreateView(QWidget):
 
     def get_form_data(self):
         """Collects data from UI widgets and returns it as a dictionary."""
-        
+        endorsement_model_length = len(EndorsementModel.__table__.columns.keys())
+
+        print(endorsement_model_length)
+
         return {
             "t_refno": self.t_refno_input.text(),
             "t_date_endorsed": self.t_date_endorsed_input.date().toPyDate(),
@@ -582,7 +590,8 @@ class EndorsementCreateView(QWidget):
             "t_status": self.t_status_input.currentData(), # Retrieves the stored Enum object
             "t_endorsed_by": self.t_endorsed_by_input.currentText(),
             "t_has_excess": self.has_excess_checkbox.isChecked(),
-            "t_bag_num": self.t_bag_num_input.value()
+            "t_bag_num": self.t_bag_num_input.value(),
+            "t_remarks": self.t_remarks_by_input.currentText()
         }
 
     def clear_error_messages(self):
@@ -634,9 +643,17 @@ class EndorsementCreateView(QWidget):
 
                 if "Quantity" in message:
                     self.show_quantity_error(message)
+                elif "Lot range" in message or "overlaps with existing lot" in message:
+                    # Display it next to the lot number field
+                    error_label_key = "t_lotnumberwhole_error"
+
+                    if error_label_key in self.form_fields:
+                        self.form_fields[error_label_key].setText(message)
+                        # self.t_lotnumberwhole_input.setStyleSheet("border: 1px solid red;")
                 else:
                     # Fallback - show in status bar or as a message box
                     StyledMessageBox.warning(self, "Validation Error", message)
+                    return
 
     def save_endorsement(self):
         """Collects form data, validates it using Pydantic, and handles the result."""
@@ -649,49 +666,131 @@ class EndorsementCreateView(QWidget):
             session = self.Session()
 
             # -------------------Validate the data using your Pydantic schema ---------------------
-            validated_data = EndorsementFormSchema(**form_data)
-            
+            # ---------- SET THE SESSION HERE IN FOR THE SCHEMA ------------
+            # EndorsementFormSchema.set_db_session(session)
+
+            # ---------- SET THE FORM SCHEMA VALIDATION HERE --------------
+            # validated_data = EndorsementFormSchema(**form_data)
+            validated_data = EndorsementFormSchema.validate_with_session(form_data, session)
+
             # --------------------------------------------------------------------------
             # before passing the validated form in the endorsement model check first if the data is already existing on the database
             
-            is_lot_existing = session.query(EndorsementModel).filter(
-                EndorsementModel.t_lotnumberwhole == validated_data.t_lotnumberwhole
+            # NOTE: IS_LOT_EXISTING_T2 HANDLES THE PART IF THE LOT NUMBER WAS PREVIOUSLY ENTERED AS A WHOLE LOT NUMBER
+            # is_lot_existing_in_t1 = session.query(EndorsementModel).filter(
+            #     EndorsementModel.t_lotnumberwhole == validated_data.t_lotnumberwhole
+            # ).first()
+
+            is_lot_existing_t2 = session.query(EndorsementModelT2).filter(
+                EndorsementModelT2.t_lotnumbersingle == validated_data.t_lotnumberwhole
             ).first()
 
-            if is_lot_existing:
-                print(True)
-                # prompt the user that an item is already existing on the database.
-                # enforce the user to just only change weight per lot 
+            if is_lot_existing_t2:
+                if "-" in validated_data.t_lotnumberwhole:
+                    # NOTE: THAT THIS TRANSACTION SHOULD ONLY ACCEPT SINGLE LOT NUMBERS IF THE LOT NUMBER IS ALREADY EXISTING (NOT A WHOLE LOT SCENARIO.)
+                    StyledMessageBox.warning(
+                        self,
+                        "Lot number is existing",
+                        f"Your lot number input '{validated_data.t_lotnumberwhole}' is not correct. Please use a single lot entry only."
+                    )
+                    
+                    return
 
-                # TODO: 
+                # TODO:
+                # PROMPT THE USER THAT AN ITEM IS ALREADY EXISTING ON THE DATABASE
                 # CREATE A MESSAGE BOX TELLING THE EXISTING DATA ON THE USER
                 # CREATE A FUNCTION HERE THAT OMITS THE WHOLE ENTRY AND JUST UPDATE THE t_qtykg on the endorsement table 1
-                # CREATE A BAG NUMBER MODEL IN THE DATABASE
+                # ADD A LOGIC FOR CHECKING THE LOT NUMBER INSIDE THE LOT NUMBER 2 AS WELL
+                # CREATE A BAG NUMBER MODEL IN THE DATABASE (DONE)
+                # FIX THE CODE LOGIC HERE
+
+                details = {} 
+                # just find the lot numbers in the ENDORSEMENT TABLE 2 COLUMN INSTEAD              
+                for column in EndorsementModel.__table__.columns:
+                    key = column.name
+                    # logic problem here
+                    value = getattr(is_lot_existing_in_t1, key)
+
+                    if isinstance(value, Enum):
+                        value = value.value
+
+                    if isinstance(value, (datetime.date, datetime.datetime)):
+                        value = value.isoformat()
+
+                    details[key] = value
+
+                detailed_str = json.dumps(details, indent=4, default=str)
                 
+                TerminalCustomStylePrint.terminal_message_custom_format(detailed_str)
+                ans_res = StyledMessageBox.question(
+                    self,
+                    "Lot number is already existing",
+                    f"The following lot already exists in the database:\n\n{detailed_str}\n\n"
+                    "Are you sure you want to continue?"
+                )
+
+                if ans_res == StyledMessageBox.StandardButton.Yes:
+                    # TODO: if the prompt is yes. omit the lotnumber input of the user. And update the qty of the existing lot number
+                    
+                    # fetch the details variable here
+
+                    # UPDATE THE VALUE HERE OF THE QTY IN THE MAIN ENDORSEMENT TABLE 1
+                    # increment the value here
+                    is_lot_existing_in_t1.t_qtykg += validated_data.t_qtykg
+
+                    # CREATE A NEW OBJECT ON THE ENDORSEMENT TABLE 2 WITH THAT DATA.
+                    # NOTE: THAT THE ENDORSEMENT REFERENCE NUMBER SHOULD BE THE is_lot_existing_t1.ref_no
+                    # SHOULD BE A SINGLE ENTRY 
+                    # endorsement_t2 = EndorsementModelT2(
+                        
+                    # )
+                    insert_existing_lot_t2("test")
+
+                    print("User clicked Yes")
+                    
+                    # remove the return statement here after
+                    return
+                elif ans_res == StyledMessageBox.StandardButton.No:
+                    print("User clicked No")
+
+                    # end the process immedietly here 
+                    # NOTE: that if the user presses the x button on the question box it is interpreted as 'No' as well
+                    return
+
             else:
+                # if the lot is not existing just proceed as expected. 
+                # and just proceed in including it in the database.
                 print(False)
 
+                # print(validated_data.model_dump_json(indent=2)) 
+                # ------------- if the form is valid store this in the database. ---------------------
+                endorsement = EndorsementModel(**validated_data.model_dump())
+                    
+                populate_endorsement_items(
+                    endorsement_model=endorsement,
+                    endorsement_model_t2=EndorsementModelT2,
+                    endorsement_lot_excess_model=EndorsementLotExcessModel,
+                    validated_data=validated_data,
+                    category=self.t_category_input.currentText(),
+                    has_excess=self.has_excess_checkbox.isChecked()
+                )
 
-        
+                session.add(endorsement)
+
             # --------------------------------------------------------------------------
 
-            # print(validated_data.model_dump_json(indent=2)) 
-            # ------------- if the form is valid store this in the database. ---------------------
-            endorsement = EndorsementModel(**validated_data.model_dump())
-                
-            populate_endorsement_items(
-                endorsement_model=endorsement,
-                endorsement_model_t2=EndorsementModelT2,
-                endorsement_lot_excess_model=EndorsementLotExcessModel,
-                validated_data=validated_data,
-                category=self.t_category_input.currentText(),
-                has_excess=self.has_excess_checkbox.isChecked()
-            )
-
-            session.add(endorsement)
-            
             # ---------------- commit the changes if all transaction in the try block is valid ----------------
             session.commit()
+        except ValueError as e:
+            # self.form_fields["t_lotnumberwhole_error"].setText(str(e))
+            # print(type(e))
+            # print(len(e.errors()))
+            # print(e.errors()[0]["msg"])
+            error_message_instance = e.errors()[0]["msg"]
+
+            self.form_fields["t_lotnumberwhole_error"].setText(error_message_instance)
+            self.t_lotnumberwhole_input.setStyleSheet("border: 1px solid red;")
+            session.rollback()
         except ValidationError as e:            
             self.display_errors(e.errors())
             
@@ -700,12 +799,14 @@ class EndorsementCreateView(QWidget):
                 "Validation Error",
                 "Please correct the errors in the form"
             )
+            session.rollback()
         except IntegrityError as e:
             StyledMessageBox.critical(
                 self,
                 "Error",
                 f"Item is already existing on the database. Please add another item: {e}"
             ) 
+            session.rollback()
 
         except Exception as e:
             StyledMessageBox.critical(
@@ -713,6 +814,7 @@ class EndorsementCreateView(QWidget):
                 "Error",
                 f"An unexpected error occurred: {e}"
             )
+            session.rollback()
         else:
             StyledMessageBox.information(
                 self,
