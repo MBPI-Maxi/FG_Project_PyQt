@@ -575,9 +575,8 @@ class EndorsementCreateView(QWidget):
 
     def get_form_data(self):
         """Collects data from UI widgets and returns it as a dictionary."""
-        endorsement_model_length = len(EndorsementModel.__table__.columns.keys())
-
-        print(endorsement_model_length)
+        # endorsement_model_length = len(EndorsementModel.__table__.columns.keys())
+        # print(endorsement_model_length)
 
         return {
             "t_refno": self.t_refno_input.text(),
@@ -606,6 +605,9 @@ class EndorsementCreateView(QWidget):
             ModifiedDoubleSpinBox,
         )
 
+        # CLEAR THE LOT NUMBER WHOLE STYLE SHEET
+        self.t_lotnumberwhole_input.setStyleSheet("")
+
         for key in self.form_fields:
             if key.endswith("_error"):
                 self.form_fields[key].setText("")
@@ -614,6 +616,7 @@ class EndorsementCreateView(QWidget):
                 
                 if field_name in self.form_fields and isinstance(self.form_fields[field_name], valid_instance):
                     self.form_fields[field_name].setStyleSheet("") # Clear any red borders etc.
+                
 
     def display_errors(self, errors):
         """Displays validation errors next to the corresponding fields."""
@@ -671,7 +674,12 @@ class EndorsementCreateView(QWidget):
 
             # ---------- SET THE FORM SCHEMA VALIDATION HERE --------------
             # validated_data = EndorsementFormSchema(**form_data)
-            validated_data = EndorsementFormSchema.validate_with_session(form_data, session)
+            validated_data = EndorsementFormSchema.validate_with_session(
+                form_data, 
+                session,
+                endorsement_model_t1=EndorsementModel,
+                endorsement_model_t2=EndorsementModelT2
+            )
 
             # --------------------------------------------------------------------------
             # before passing the validated form in the endorsement model check first if the data is already existing on the database
@@ -686,15 +694,16 @@ class EndorsementCreateView(QWidget):
             ).first()
 
             if is_lot_existing_t2:
-                if "-" in validated_data.t_lotnumberwhole:
-                    # NOTE: THAT THIS TRANSACTION SHOULD ONLY ACCEPT SINGLE LOT NUMBERS IF THE LOT NUMBER IS ALREADY EXISTING (NOT A WHOLE LOT SCENARIO.)
-                    StyledMessageBox.warning(
-                        self,
-                        "Lot number is existing",
-                        f"Your lot number input '{validated_data.t_lotnumberwhole}' is not correct. Please use a single lot entry only."
-                    )
+                # NOTE: THIS IS ALREADY BEING HANDLED IN THE SCHEMA
+                # if "-" in validated_data.t_lotnumberwhole:
+                #     # NOTE: THAT THIS TRANSACTION SHOULD ONLY ACCEPT SINGLE LOT NUMBERS IF THE LOT NUMBER IS ALREADY EXISTING (NOT A WHOLE LOT SCENARIO.)
+                #     StyledMessageBox.warning(
+                #         self,
+                #         "Lot number is existing",
+                #         f"Your lot number input '{validated_data.t_lotnumberwhole}' is not correct. Please use a single lot entry only."
+                #     )
                     
-                    return
+                #     return
 
                 # TODO:
                 # PROMPT THE USER THAT AN ITEM IS ALREADY EXISTING ON THE DATABASE
@@ -704,28 +713,50 @@ class EndorsementCreateView(QWidget):
                 # CREATE A BAG NUMBER MODEL IN THE DATABASE (DONE)
                 # FIX THE CODE LOGIC HERE
 
-                details = {} 
-                # just find the lot numbers in the ENDORSEMENT TABLE 2 COLUMN INSTEAD              
-                for column in EndorsementModel.__table__.columns:
-                    key = column.name
-                    # logic problem here
-                    value = getattr(is_lot_existing_in_t1, key)
+                # details = {} 
+                # # just find the lot numbers in the ENDORSEMENT TABLE 2 COLUMN INSTEAD              
+                # for column in EndorsementModel.__table__.columns:
+                #     key = column.name
+                #     # logic problem here
+                #     value = getattr(is_lot_existing_in_t1, key)
 
-                    if isinstance(value, Enum):
-                        value = value.value
+                #     if isinstance(value, Enum):
+                #         value = value.value
 
-                    if isinstance(value, (datetime.date, datetime.datetime)):
-                        value = value.isoformat()
+                #     if isinstance(value, (datetime.date, datetime.datetime)):
+                #         value = value.isoformat()
 
-                    details[key] = value
+                #     details[key] = value
 
-                detailed_str = json.dumps(details, indent=4, default=str)
+                # detailed_str = json.dumps(details, indent=4, default=str)
                 
-                TerminalCustomStylePrint.terminal_message_custom_format(detailed_str)
+                # TerminalCustomStylePrint.terminal_message_custom_format(detailed_str)
+                # ans_res = StyledMessageBox.question(
+                #     self,
+                #     "Lot number is already existing",
+                #     f"The following lot already exists in the database:\n\n{detailed_str}\n\n"
+                #     "Are you sure you want to continue?"
+                # )
+
+                details = {}
+                for column in EndorsementModelT2.__table__.columns:
+                    key = column.name
+                    
+                    if key in (("t_refno", "t_lotnumbersingle", "t_qty")):
+                        value = getattr(is_lot_existing_t2, key)
+                        
+                        details[key] = value
+                
+                details.update()
+
+                details_str = json.dumps(details, indent=4, default=str)
+                TerminalCustomStylePrint.terminal_message_custom_format(
+                    details_str
+                )
                 ans_res = StyledMessageBox.question(
                     self,
                     "Lot number is already existing",
-                    f"The following lot already exists in the database:\n\n{detailed_str}\n\n"
+                    f"The following lot already exists in the database:\n\n{details_str}\n\n"
                     "Are you sure you want to continue?"
                 )
 
@@ -736,7 +767,7 @@ class EndorsementCreateView(QWidget):
 
                     # UPDATE THE VALUE HERE OF THE QTY IN THE MAIN ENDORSEMENT TABLE 1
                     # increment the value here
-                    is_lot_existing_in_t1.t_qtykg += validated_data.t_qtykg
+                    # is_lot_existing_in_t1.t_qtykg += validated_data.t_qtykg
 
                     # CREATE A NEW OBJECT ON THE ENDORSEMENT TABLE 2 WITH THAT DATA.
                     # NOTE: THAT THE ENDORSEMENT REFERENCE NUMBER SHOULD BE THE is_lot_existing_t1.ref_no
@@ -744,7 +775,7 @@ class EndorsementCreateView(QWidget):
                     # endorsement_t2 = EndorsementModelT2(
                         
                     # )
-                    insert_existing_lot_t2("test")
+                    # insert_existing_lot_t2("test")
 
                     print("User clicked Yes")
                     
@@ -831,9 +862,6 @@ class EndorsementCreateView(QWidget):
             self.refresh_table()
         finally:
             session.close()
-
-    def show_lot_exists_warning(self):
-        pass
 
     def clear_form(self):
         """Resets the input fields to their initial state."""

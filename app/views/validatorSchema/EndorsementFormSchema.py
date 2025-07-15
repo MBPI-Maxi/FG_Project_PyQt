@@ -1,11 +1,28 @@
 from constants.Enums import StatusEnum, CategoryEnum
 from datetime import date
 from pydantic import BaseModel, Field, field_validator, model_validator
-from typing import Optional, Type
-from sqlalchemy.orm import Session
-from models import EndorsementModel
+from typing import Optional, Type, TypedDict
+from sqlalchemy.orm import Session, DeclarativeMeta
+from constants.Enums import CategoryEnum, StatusEnum
 import re
 import math
+
+class FormData(TypedDict):
+    """
+    Update this code when you are changing EndorsementCreateView.get_form_data() method
+    """
+    t_refno: str
+    t_date_endorsed: date
+    t_category: CategoryEnum 
+    t_prodcode: str
+    t_lotnumberwhole: str
+    t_qtykg: float
+    t_wtlot: float
+    t_status: StatusEnum  
+    t_endorsed_by: str
+    t_has_excess: bool
+    t_bag_num: int
+    t_remarks: str
 
 
 # --- FORM SCHEMA IS CREATED HERE FOR SERIALIZATION AND VALIDATION ---
@@ -80,16 +97,39 @@ class EndorsementFormSchema(BaseModel):
     # ----------------------------------------
 
     _db_session = None
+    _endorsement_model_t1 = None
+    _endorsement_model_t2 = None
 
     @classmethod
     def set_db_session(cls, session: Type[Session]):
         cls._db_session = session
     
     @classmethod
-    def validate_with_session(cls, data: dict, session: Session):
+    def set_model_t1(cls, model: Type[DeclarativeMeta]):
+        cls._endorsement_model_t1 = model
+
+    @classmethod
+    def set_model_t2(cls, model: Type[DeclarativeMeta]):
+        cls._endorsement_model_t2 = model
+    
+    @classmethod
+    def validate_with_session(
+        cls, 
+        data: FormData,  # data of the inputs of pyqt6
+        session: Type[Session],
+        endorsement_model_t1: Type[DeclarativeMeta] = None,
+        endorsement_model_t2: Type[DeclarativeMeta] = None
+    ):
         """Helper method to validate with a database session"""
         try:
+            if endorsement_model_t1:
+                cls.set_model_t1(endorsement_model_t1)
+            
+            if endorsement_model_t2:
+                cls.set_model_t2(endorsement_model_t2)
+            
             cls.set_db_session(session)
+
             return cls(**data)
         finally:
             cls.set_db_session(None)
@@ -237,59 +277,113 @@ class EndorsementFormSchema(BaseModel):
         
         return self
 
+    # @model_validator(mode="after")
+    # def validate_no_overlapping_lots(self):
+    #     if self._db_session is None or self._endorsement_model_t1 is None:
+    #         return self  # Skip validation if no session
+
+    #     if not hasattr(self, 't_lotnumberwhole') or not self.t_lotnumberwhole:
+    #         return self
+
+    #     model = self._endorsement_model_t1
+
+    #     # Get ALL existing lots (regardless of prodcode)
+    #     existing_lots = self._db_session.query(
+    #         model.t_lotnumberwhole,
+    #         model.t_prodcode
+    #     ).filter(
+    #         model.is_deleted == False,
+    #         model.t_lotnumberwhole != self.t_lotnumberwhole  # Exclude self for updates
+    #     ).all()
+
+    #     # Parse the new lot range
+    #     if "-" in self.t_lotnumberwhole:
+    #         new_start, new_end = self.t_lotnumberwhole.split("-")
+    #         new_start_num = int(new_start[:4])
+    #         new_start_suffix = new_start[4:]
+    #         new_end_num = int(new_end[:4])
+    #         new_end_suffix = new_end[4:]
+    #     else:
+    #         new_start_num = new_end_num = int(self.t_lotnumberwhole[:4])
+    #         new_start_suffix = new_end_suffix = self.t_lotnumberwhole[4:]
+
+    #     for existing_lot, existing_prodcode in existing_lots:
+    #         # Skip if the existing lot is from the same prodcode (optional, if needed)
+    #         # if existing_prodcode == self.t_prodcode:
+    #         #     continue
+
+    #         # Parse existing lot range
+    #         if "-" in existing_lot:
+    #             existing_start, existing_end = existing_lot.split("-")
+    #             existing_start_num = int(existing_start[:4])
+    #             existing_start_suffix = existing_start[4:]
+    #             existing_end_num = int(existing_end[:4])
+    #             existing_end_suffix = existing_end[4:]
+    #         else:
+    #             existing_start_num = existing_end_num = int(existing_lot[:4])
+    #             existing_start_suffix = existing_end_suffix = existing_lot[4:]
+
+    #         # Check if suffixes match (optional, if lot suffixes must also be unique)
+    #         if new_start_suffix != existing_start_suffix:
+    #             continue  # Skip if suffixes don't match (optional)
+
+    #         # Check for numeric overlap
+    #         if (new_start_num <= existing_end_num) and (new_end_num >= existing_start_num):
+    #             raise ValueError(
+    #                 f"Lot range {self.t_lotnumberwhole} conflicts with existing lot {existing_lot} "
+    #                 f"(Product Code: {existing_prodcode}). Lot numbers must be globally unique."
+    #             )
+
+    #     return self
     @model_validator(mode="after")
     def validate_no_overlapping_lots(self):
-        if self._db_session is None:
+        if self._db_session is None or self._endorsement_model_t1 is None:
             return self  # Skip validation if no session
-                
+
         if not hasattr(self, 't_lotnumberwhole') or not self.t_lotnumberwhole:
             return self
-                
-        if not hasattr(self, 't_prodcode') or not self.t_prodcode:
+
+        model = self._endorsement_model_t1
+
+        # Skip validation for single lots (they can exist multiple times)
+        if "-" not in self.t_lotnumberwhole:
             return self
-            
-        # Get all lots for this product
-        existing_lots = self._db_session.query(EndorsementModel.t_lotnumberwhole).filter(
-            EndorsementModel.t_prodcode == self.t_prodcode,
-            EndorsementModel.is_deleted == False,
-            EndorsementModel.t_lotnumberwhole != self.t_lotnumberwhole  # Exclude self for updates
+
+        # Only check for overlapping ranges if input is a range
+        new_start, new_end = self.t_lotnumberwhole.split("-")
+        new_start_num = int(new_start[:4])
+        new_start_suffix = new_start[4:]
+        new_end_num = int(new_end[:4])
+        new_end_suffix = new_end[4:]
+
+        # Get all existing RANGED lots (not single lots)
+        existing_ranged_lots = self._db_session.query(
+            model.t_lotnumberwhole,
+            model.t_prodcode
+        ).filter(
+            model.is_deleted == False,
+            model.t_lotnumberwhole != self.t_lotnumberwhole,  # Exclude self for updates
+            model.t_lotnumberwhole.contains("-")  # Only check ranged lots
         ).all()
-        
-        existing_lots = [lot[0] for lot in existing_lots]
-        
-        # Parse the new lot range
-        if "-" in self.t_lotnumberwhole:
-            new_start, new_end = self.t_lotnumberwhole.split("-")
-            new_start_num = int(new_start[:4])
-            new_start_suffix = new_start[4:]
-            new_end_num = int(new_end[:4])
-            new_end_suffix = new_end[4:]
-        else:
-            new_start_num = new_end_num = int(self.t_lotnumberwhole[:4])
-            new_start_suffix = new_end_suffix = self.t_lotnumberwhole[4:]
-        
-        for existing_lot in existing_lots:
+
+        for existing_lot, existing_prodcode in existing_ranged_lots:
             # Parse existing lot range
-            if "-" in existing_lot:
-                existing_start, existing_end = existing_lot.split("-")
-                existing_start_num = int(existing_start[:4])
-                existing_start_suffix = existing_start[4:]
-                existing_end_num = int(existing_end[:4])
-                existing_end_suffix = existing_end[4:]
-            else:
-                existing_start_num = existing_end_num = int(existing_lot[:4])
-                existing_start_suffix = existing_end_suffix = existing_lot[4:]
-            
-            # Check if suffixes match
+            existing_start, existing_end = existing_lot.split("-")
+            existing_start_num = int(existing_start[:4])
+            existing_start_suffix = existing_start[4:]
+            existing_end_num = int(existing_end[:4])
+            existing_end_suffix = existing_end[4:]
+
+            # Check if suffixes match (optional)
             if new_start_suffix != existing_start_suffix:
                 continue
-                
+
             # Check for numeric overlap
             if (new_start_num <= existing_end_num) and (new_end_num >= existing_start_num):
                 raise ValueError(
-                    f"Lot range {self.t_lotnumberwhole} overlaps with existing lot {existing_lot}. With prod code: {self.t_prodcode} "
-                    "Please use a non-overlapping range."
+                    f"Lot range {self.t_lotnumberwhole} conflicts with existing lot {existing_lot} "
+                    f"(Product Code: {existing_prodcode}). Ranged lot numbers must not overlap."
                 )
-        
+
         return self
     ###################################################################
