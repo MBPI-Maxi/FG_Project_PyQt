@@ -747,7 +747,12 @@ class EndorsementCreateView(QWidget):
                         
                         details[key] = value
                 
-                details.update()
+                # TODO: CONTINUE THIS TOMORROW
+                print(is_lot_existing_t2.endorsement_parent.t_date_endorsed)
+
+                # details.update(
+                #     t_date_endorse=is_lot_existing_t2.endorsement_parent.t_date_endorsed
+                # )
 
                 details_str = json.dumps(details, indent=4, default=str)
                 TerminalCustomStylePrint.terminal_message_custom_format(
