@@ -3,7 +3,7 @@ from PyQt6.QtWidgets import (
     QPushButton, QLabel, QFrame, QStackedWidget, QStatusBar
 )
 from app.views import (
-    EndorsementMainView,
+    # EndorsementMainView,
     QCFailedToPassed,
     QCLabExcess,
     ReceivingReport,
@@ -14,6 +14,9 @@ from app.views import (
     RequisitionLogbook,
     QCFailedEndorsement
 )
+
+from app.views.endorsement import EndorsementMainView
+
 
 from app.helpers import load_styles
 from PyQt6.QtGui import QFont
@@ -67,6 +70,7 @@ class FGDashboard(QMainWindow):
 
         # INITIALIZED STACK (index by order)
         # INCOMING
+        # self.add_stack_page("Endorsement Widget", "Endorsement Form", EndorsementMainView(session_factory=self.Session))
         self.add_stack_page("Endorsement Widget", "Endorsement Form", EndorsementMainView(session_factory=self.Session))
         self.add_stack_page("QC Failed to Passed Widget", "QC Failed to Passed Form", QCFailedToPassed())
         self.add_stack_page("QC Lab Excess Widget", "QC Lab Excess Form", QCLabExcess())

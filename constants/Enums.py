@@ -51,6 +51,11 @@ class RemarksEnum(Enum):
     NO_REMARKS = "No Remarks"
     OVERSIZED = "OVERSIZED"
 
+class PageEnum(Enum):
+    ITEMS_PER_PAGE = 20
+    DEFAULT_CURRENT_PAGE = 1
+    DEFAULT_TOTAL_PAGES = 1
+
 class TableHeader():
     LABELS = {
         "endorsement": [

@@ -24,7 +24,6 @@ class FormData(TypedDict):
     t_bag_num: int
     t_remarks: str
 
-
 # --- FORM SCHEMA IS CREATED HERE FOR SERIALIZATION AND VALIDATION ---
 class EndorsementFormSchema(BaseModel):
     """
