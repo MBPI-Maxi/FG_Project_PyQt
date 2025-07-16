@@ -1,104 +1,72 @@
 from PyQt6.QtWidgets import (
-    QWidget, QLabel, QVBoxLayout, QHBoxLayout,
-    QLineEdit, QDateEdit, QComboBox, QDoubleSpinBox, QPushButton,
-    QCheckBox, QSizePolicy, QScrollArea,
-    QStackedWidget, QSpinBox
+    QWidget,
+    QHBoxLayout,
+    QLabel,
+    QComboBox,
+    QSizePolicy,
+    QVBoxLayout,
+    QScrollArea,
+    QPushButton,
+    QLineEdit,
+    QDateEdit,
+    QCheckBox,
+    QSpinBox
 )
-
 from app.helpers import (
     fetch_current_t_refno_in_endorsement,
     populate_endorsement_items,
-    button_cursor_pointer,
-    load_styles
-) 
-
-from PyQt6.QtCore import QDate, Qt
-from pydantic import ValidationError
-
-from typing import Union, Callable, Type
-from sqlalchemy.orm import Session
-from sqlalchemy.exc import IntegrityError
-
-from app.StyledMessage import StyledMessageBox
-from constants.Enums import StatusEnum, CategoryEnum, RemarksEnum
-from constants.mapped_user import mapped_user_to_display
-
-# MODELS
-from models import (
-    User,
-    EndorsementModel,
-    EndorsementModelT2,
-    EndorsementLotExcessModel,
-    EndorsementCombinedView
+    load_styles,
+    button_cursor_pointer
 )
 
-# CUSTOM WIDGET
 from app.widgets import (
-    LotNumberLineEdit,
-    TableWidget,
     ModifiedComboBox,
+    TableWidget,
+    LotNumberLineEdit,
     ModifiedDateEdit,
     ModifiedDoubleSpinBox
 )
 
-# ENDORSEMENT SCHEMA
-from app.views.validatorSchema import EndorsementFormSchema
+from PyQt6.QtCore import Qt, QDate
+from app.StyledMessage import StyledMessageBox, TerminalCustomStylePrint
+from typing import Callable, Type, Union
+from constants.Enums import CategoryEnum, StatusEnum, RemarksEnum
+from constants.mapped_user import mapped_user_to_display
 
-import os
+from sqlalchemy.orm import Session, DeclarativeMeta
+from sqlalchemy.exc import IntegrityError
+from pydantic import BaseModel, ValidationError
+
 import math
+import json
+import os
 
-# --- ENDORSEMENT VIEW LOGIC IS HERE ---
+
 class EndorsementCreateView(QWidget):
-    """
-    A form widget for creating and submitting product endorsements.
-
-    This view provides a user interface for entering endorsement information including:
-    - Reference number (auto-generated)
-    - Date endorsed
-    - Product category and code
-    - Lot numbers (with support for whole/partial lot formats)
-    - Quantity and weight measurements
-    - Status selection
-    - Endorsement approver selection
-
-    The form includes validation, error display, and database persistence capabilities.
-
-    Args:
-        session_factory (Callable[..., Session]): A factory function that creates SQLAlchemy sessions
-        parent (QWidget, optional): The parent widget. Defaults to None.
-
-    Attributes:
-        Session (Callable[..., Session]): Factory for creating database sessions
-        form_fields (dict): Stores references to input widgets and their error labels
-        main_layout (QVBoxLayout): The main layout container for the form
-
-    Methods:
-        init_ui(): Initializes the user interface components
-        apply_styles(): Applies CSS styling to the widget
-        create_input_horizontal_layout(): Creates a standardized input row with label, widget, and error display
-        Various create_*_row() methods: Create specific form input rows
-        get_form_data(): Collects and returns form data as a dictionary
-        clear_error_messages(): Clears all validation error displays
-        display_errors(): Shows validation errors next to the relevant fields
-        save_endorsement(): Validates and saves the endorsement data
-        clear_form(): Resets all form fields to their default state
-    """
-    
-    def __init__(self, session_factory: Callable[..., Session], parent=None):
-        """
-        Initialize the endorsement form view.
-        
-        Args:
-            session_factory: Factory function for creating SQLAlchemy sessions
-            parent: Optional parent widget
-        """
+    def __init__(
+        self, 
+        session_factory: Callable[..., Session],
+        endorsement_t1: Type[DeclarativeMeta],
+        endorsement_t2: Type[DeclarativeMeta],
+        endorsement_combined_view: Type[DeclarativeMeta],
+        endorsement_lot_excess: Type[DeclarativeMeta],
+        endorsement_form_schema: Type[BaseModel],
+        user_model: Type[DeclarativeMeta],
+        parent=None
+    ):
         super().__init__(parent)
         self.setWindowTitle("Endorsement Form")
         self.setObjectName("EndorsementForm")
         
         self.Session = session_factory
-        self.table_widget = self.show_table()
+        self.endorsement_t1 = endorsement_t1
+        self.enodrsement_t2 = endorsement_t2
+        self.endorsement_combined_view = endorsement_combined_view
+        self.endorsement_lot_excess = endorsement_lot_excess
+        self.endorsement_form_schema = endorsement_form_schema
+        self.user_model = user_model
        
+        self.table_widget = self.show_table()
         self.init_ui()
         self.apply_styles()
 
@@ -118,11 +86,11 @@ class EndorsementCreateView(QWidget):
 
             # -------------- Label (fixed width) ----------------
             label = QLabel(label_text)
-            label.setFixedWidth(150)  # Adjust as needed
+            label.setFixedWidth(150) 
             label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
             
             # ---------- width of the widget field --------------
-            widget.setFixedWidth(450)  # Set your desired field width
+            widget.setFixedWidth(450)
             
             if isinstance(widget, (QComboBox, ModifiedComboBox)):
                 widget.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -213,7 +181,7 @@ class EndorsementCreateView(QWidget):
     def show_table(self):
         table = TableWidget(
             session_factory=self.Session, 
-            db_model=EndorsementCombinedView, 
+            db_model=self.endorsement_combined_view, 
             view_type="endorsement-create", 
             parent=self,
         )
@@ -457,7 +425,7 @@ class EndorsementCreateView(QWidget):
 
         try:
             session = self.Session()
-            reference_num = fetch_current_t_refno_in_endorsement(session, EndorsementModel)
+            reference_num = fetch_current_t_refno_in_endorsement(session, self.endorsement_t1)
             
             self.t_refno_input.setText(reference_num)
             create_input_row("Reference Number:", refno_container, "t_refno", "t_refno_error")   
@@ -532,6 +500,7 @@ class EndorsementCreateView(QWidget):
             self.t_status_input.addItem(status.value, status)
 
         self.t_status_input.setCurrentText(StatusEnum.PASSED.value)
+
         #  ---------------------- disable the status so that the user cannot change the combox box value ---------------------
         self.t_status_input.setDisabled(True)
         create_input_row("Status:", self.t_status_input, "t_status", "t_status_error")
@@ -541,12 +510,11 @@ class EndorsementCreateView(QWidget):
         create_input_row: Callable[[str, Union[QWidget, QLineEdit], str, str], None]
     ):
         self.t_endorsed_by_input = ModifiedComboBox()
-        
         session = self.Session()
 
         try:
             # fetch all the user by username
-            users = session.query(User).all()
+            users = session.query(self.user_model).all()
 
             for user  in users:
                 displayed_user_text = mapped_user_to_display(user.username)
@@ -570,7 +538,7 @@ class EndorsementCreateView(QWidget):
 
     def get_form_data(self):
         """Collects data from UI widgets and returns it as a dictionary."""
-        
+
         return {
             "t_refno": self.t_refno_input.text(),
             "t_date_endorsed": self.t_date_endorsed_input.date().toPyDate(),
@@ -582,7 +550,8 @@ class EndorsementCreateView(QWidget):
             "t_status": self.t_status_input.currentData(), # Retrieves the stored Enum object
             "t_endorsed_by": self.t_endorsed_by_input.currentText(),
             "t_has_excess": self.has_excess_checkbox.isChecked(),
-            "t_bag_num": self.t_bag_num_input.value()
+            "t_bag_num": self.t_bag_num_input.value(),
+            "t_remarks": self.t_remarks_by_input.currentText()
         }
 
     def clear_error_messages(self):
@@ -591,11 +560,14 @@ class EndorsementCreateView(QWidget):
             QLineEdit,
             QComboBox,
             QDateEdit,
-            QDoubleSpinBox,
+            # QDoubleSpinBox,
             ModifiedComboBox,
             ModifiedDateEdit,
             ModifiedDoubleSpinBox,
         )
+
+        # CLEAR THE LOT NUMBER WHOLE STYLE SHEET
+        self.t_lotnumberwhole_input.setStyleSheet("")
 
         for key in self.form_fields:
             if key.endswith("_error"):
@@ -605,6 +577,7 @@ class EndorsementCreateView(QWidget):
                 
                 if field_name in self.form_fields and isinstance(self.form_fields[field_name], valid_instance):
                     self.form_fields[field_name].setStyleSheet("") # Clear any red borders etc.
+                
 
     def display_errors(self, errors):
         """Displays validation errors next to the corresponding fields."""
@@ -634,9 +607,17 @@ class EndorsementCreateView(QWidget):
 
                 if "Quantity" in message:
                     self.show_quantity_error(message)
+                elif "Lot range" in message or "overlaps with existing lot" in message:
+                    # Display it next to the lot number field
+                    error_label_key = "t_lotnumberwhole_error"
+
+                    if error_label_key in self.form_fields:
+                        self.form_fields[error_label_key].setText(message)
+                        # self.t_lotnumberwhole_input.setStyleSheet("border: 1px solid red;")
                 else:
                     # Fallback - show in status bar or as a message box
                     StyledMessageBox.warning(self, "Validation Error", message)
+                    return
 
     def save_endorsement(self):
         """Collects form data, validates it using Pydantic, and handles the result."""
@@ -649,49 +630,173 @@ class EndorsementCreateView(QWidget):
             session = self.Session()
 
             # -------------------Validate the data using your Pydantic schema ---------------------
-            validated_data = EndorsementFormSchema(**form_data)
-            
+            # ---------- SET THE SESSION HERE IN FOR THE SCHEMA ------------
+            # EndorsementFormSchema.set_db_session(session)
+
+            # ---------- SET THE FORM SCHEMA VALIDATION HERE --------------
+            # validated_data = EndorsementFormSchema(**form_data)
+            validated_data = self.endorsement_form_schema.validate_with_session(
+                form_data, 
+                session,
+                endorsement_model_t1=self.endorsement_t1,
+                endorsement_model_t2=self.enodrsement_t2
+            )
+
             # --------------------------------------------------------------------------
             # before passing the validated form in the endorsement model check first if the data is already existing on the database
             
-            is_lot_existing = session.query(EndorsementModel).filter(
-                EndorsementModel.t_lotnumberwhole == validated_data.t_lotnumberwhole
+            # NOTE: IS_LOT_EXISTING_T2 HANDLES THE PART IF THE LOT NUMBER WAS PREVIOUSLY ENTERED AS A WHOLE LOT NUMBER
+            # is_lot_existing_in_t1 = session.query(EndorsementModel).filter(
+            #     EndorsementModel.t_lotnumberwhole == validated_data.t_lotnumberwhole
+            # ).first()
+
+            is_lot_existing_t2 = session.query(self.enodrsement_t2).filter(
+                self.enodrsement_t2.t_lotnumbersingle == validated_data.t_lotnumberwhole
             ).first()
 
-            if is_lot_existing:
-                print(True)
-                # prompt the user that an item is already existing on the database.
-                # enforce the user to just only change weight per lot 
+            if is_lot_existing_t2:
+                # NOTE: THIS IS ALREADY BEING HANDLED IN THE SCHEMA
+                # if "-" in validated_data.t_lotnumberwhole:
+                #     # NOTE: THAT THIS TRANSACTION SHOULD ONLY ACCEPT SINGLE LOT NUMBERS IF THE LOT NUMBER IS ALREADY EXISTING (NOT A WHOLE LOT SCENARIO.)
+                #     StyledMessageBox.warning(
+                #         self,
+                #         "Lot number is existing",
+                #         f"Your lot number input '{validated_data.t_lotnumberwhole}' is not correct. Please use a single lot entry only."
+                #     )
+                    
+                #     return
 
-                # TODO: 
+                # TODO:
+                # PROMPT THE USER THAT AN ITEM IS ALREADY EXISTING ON THE DATABASE
                 # CREATE A MESSAGE BOX TELLING THE EXISTING DATA ON THE USER
                 # CREATE A FUNCTION HERE THAT OMITS THE WHOLE ENTRY AND JUST UPDATE THE t_qtykg on the endorsement table 1
-                # CREATE A BAG NUMBER MODEL IN THE DATABASE
+                # ADD A LOGIC FOR CHECKING THE LOT NUMBER INSIDE THE LOT NUMBER 2 AS WELL
+                # CREATE A BAG NUMBER MODEL IN THE DATABASE (DONE)
+                # FIX THE CODE LOGIC HERE
+
+                # details = {} 
+                # # just find the lot numbers in the ENDORSEMENT TABLE 2 COLUMN INSTEAD              
+                # for column in EndorsementModel.__table__.columns:
+                #     key = column.name
+                #     # logic problem here
+                #     value = getattr(is_lot_existing_in_t1, key)
+
+                #     if isinstance(value, Enum):
+                #         value = value.value
+
+                #     if isinstance(value, (datetime.date, datetime.datetime)):
+                #         value = value.isoformat()
+
+                #     details[key] = value
+
+                # detailed_str = json.dumps(details, indent=4, default=str)
                 
+                # TerminalCustomStylePrint.terminal_message_custom_format(detailed_str)
+                # ans_res = StyledMessageBox.question(
+                #     self,
+                #     "Lot number is already existing",
+                #     f"The following lot already exists in the database:\n\n{detailed_str}\n\n"
+                #     "Are you sure you want to continue?"
+                # )
+
+                details = {}
+                for column in self.enodrsement_t2.__table__.columns:
+                    key = column.name
+                    
+                    if key in (("t_refno", "t_lotnumbersingle", "t_qty")):
+                        value = getattr(is_lot_existing_t2, key)
+                        
+                        details[key] = value
+                
+                # --------- UPDATE THE KEY NAMES HERE FOR USER TO SEE --------
+                # NOTE: THAT IF THE COLUMNS BECOME BIG ITERATE THRU IT
+                details["Reference No"] = details.pop("t_refno")
+                details["Lot Number"] = details.pop("t_lotnumbersingle")
+                details["Quantity"] = details.pop("t_qty") 
+
+                # -------- UPDATE THE DATA HERE --------
+                details.update({
+                    "Weight Per Lot": is_lot_existing_t2.endorsement_parent.t_wtlot,
+                    "Date Endorsed": is_lot_existing_t2.endorsement_parent.t_date_endorsed.isoformat(),
+                    "Has Excess": is_lot_existing_t2.endorsement_parent.t_has_excess,
+                    "Endorsed By": is_lot_existing_t2.endorsement_parent.t_endorsed_by
+                })
+
+                details_str = json.dumps(details, indent=4, default=str)
+                
+                TerminalCustomStylePrint.terminal_message_custom_format(
+                    details_str
+                )
+
+                ans_res = StyledMessageBox.question(
+                    self,
+                    "Lot number is already existing",
+                    f"The following lot already exists in the database:\n\n{details_str}\n\n"
+                    "Are you sure you want to continue?"
+                )
+
+                if ans_res == StyledMessageBox.StandardButton.Yes:
+                    # TODO: if the prompt is yes. omit the lotnumber input of the user. And update the qty of the existing lot number
+                    
+                    # fetch the details variable here
+
+                    # UPDATE THE VALUE HERE OF THE QTY IN THE MAIN ENDORSEMENT TABLE 1
+                    # increment the value here
+                    # is_lot_existing_in_t1.t_qtykg += validated_data.t_qtykg
+
+                    # CREATE A NEW OBJECT ON THE ENDORSEMENT TABLE 2 WITH THAT DATA.
+                    # NOTE: THAT THE ENDORSEMENT REFERENCE NUMBER SHOULD BE THE is_lot_existing_t1.ref_no
+                    # SHOULD BE A SINGLE ENTRY 
+                    # endorsement_t2 = EndorsementModelT2(
+                        
+                    # )
+                    # insert_existing_lot_t2("test")
+
+                    print("User clicked Yes")
+                    
+                    # remove the return statement here after
+                    return
+                elif ans_res == StyledMessageBox.StandardButton.No:
+                    print("User clicked No")
+
+                    # end the process immedietly here 
+                    # NOTE: that if the user presses the x button on the question box it is interpreted as 'No' as well
+                    return
+
             else:
+                # if the lot is not existing just proceed as expected. 
+                # and just proceed in including it in the database.
                 print(False)
 
+                # print(validated_data.model_dump_json(indent=2)) 
+                # ------------- if the form is valid store this in the database. ---------------------
+                endorsement = self.endorsement_t1(**validated_data.model_dump())
+                    
+                populate_endorsement_items(
+                    endorsement_model=endorsement,
+                    endorsement_model_t2=self.enodrsement_t2,
+                    endorsement_lot_excess_model=self.endorsement_lot_excess,
+                    validated_data=validated_data,
+                    category=self.t_category_input.currentText(),
+                    has_excess=self.has_excess_checkbox.isChecked()
+                )
 
-        
+                session.add(endorsement)
+
             # --------------------------------------------------------------------------
 
-            # print(validated_data.model_dump_json(indent=2)) 
-            # ------------- if the form is valid store this in the database. ---------------------
-            endorsement = EndorsementModel(**validated_data.model_dump())
-                
-            populate_endorsement_items(
-                endorsement_model=endorsement,
-                endorsement_model_t2=EndorsementModelT2,
-                endorsement_lot_excess_model=EndorsementLotExcessModel,
-                validated_data=validated_data,
-                category=self.t_category_input.currentText(),
-                has_excess=self.has_excess_checkbox.isChecked()
-            )
-
-            session.add(endorsement)
-            
             # ---------------- commit the changes if all transaction in the try block is valid ----------------
             session.commit()
+        except ValueError as e:
+            # self.form_fields["t_lotnumberwhole_error"].setText(str(e))
+            # print(type(e))
+            # print(len(e.errors()))
+            # print(e.errors()[0]["msg"])
+            error_message_instance = e.errors()[0]["msg"]
+
+            self.form_fields["t_lotnumberwhole_error"].setText(error_message_instance)
+            self.t_lotnumberwhole_input.setStyleSheet("border: 1px solid red;")
+            session.rollback()
         except ValidationError as e:            
             self.display_errors(e.errors())
             
@@ -700,12 +805,14 @@ class EndorsementCreateView(QWidget):
                 "Validation Error",
                 "Please correct the errors in the form"
             )
+            session.rollback()
         except IntegrityError as e:
             StyledMessageBox.critical(
                 self,
                 "Error",
                 f"Item is already existing on the database. Please add another item: {e}"
             ) 
+            session.rollback()
 
         except Exception as e:
             StyledMessageBox.critical(
@@ -713,6 +820,7 @@ class EndorsementCreateView(QWidget):
                 "Error",
                 f"An unexpected error occurred: {e}"
             )
+            session.rollback()
         else:
             StyledMessageBox.information(
                 self,
@@ -724,14 +832,11 @@ class EndorsementCreateView(QWidget):
             self.clear_form()
             
             # ALSO FETCH THE REF_NO AGAIN. TO be displayed
-            reference_number = fetch_current_t_refno_in_endorsement(session, EndorsementModel)
+            reference_number = fetch_current_t_refno_in_endorsement(session, self.endorsement_t1)
             self.t_refno_input.setText(reference_number)
             self.refresh_table()
         finally:
             session.close()
-
-    def show_lot_exists_warning(self):
-        pass
 
     def clear_form(self):
         """Resets the input fields to their initial state."""
@@ -766,396 +871,10 @@ class EndorsementCreateView(QWidget):
         self.clear_error_messages()
 
     def apply_styles(self):
-        qss_style = os.path.join(os.path.dirname(__file__), "styles", "endorsement.css")
         button_cursor_pointer(self.save_button)
+
+        current_dir = os.path.dirname(__file__)
+        qss_path = os.path.join(current_dir, "..", "styles", "endorsement.css")
+        qss_path = os.path.abspath(qss_path)
         
-        load_styles(qss_style, self)
-class EndorsementListView(QWidget):
-    """View with filters and table"""
-    def __init__(self, session_factory: Callable[..., Session], parent=None):
-        super().__init__(parent)
-        self.Session = session_factory
-        self.setup_ui()
-        self.apply_styles()
-        
-    def setup_ui(self):
-        layout = QVBoxLayout()
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(6)
-
-        top_filter_layout, bottom_filter_layout = self.create_filter_layout()
-        self.table = self.show_table()
-
-        # ------------- Add all to main layout ----------------
-        layout.addLayout(top_filter_layout)
-        layout.addLayout(bottom_filter_layout)
-        layout.addWidget(self.table)
-        layout.setStretch(2, 1)
-
-        self.create_category_menu()
-        self.setLayout(layout)
-
-        # connect the button to filter function
-        self.search_button.clicked.connect(self.filter_function)
-        self.list_reset_btn.clicked.connect(self.list_reset_callback)
-        
-        # Connect returnPressed signals for quick filtering
-        self.ref_no_input.returnPressed.connect(self.filter_function)
-        self.prod_code_input.returnPressed.connect(self.filter_function)
-
-    def apply_styles(self):
-        qss_path = os.path.join(os.path.dirname(__file__), "styles", "endorsement_list.css")
-
-        load_styles(qss_path, self)
-    
-    def show_table(self):
-        table = TableWidget(
-            session_factory=self.Session,
-            db_model=EndorsementCombinedView,
-            view_type="endorsement-list"
-        )
-        table.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        
-        return table
-
-    def create_category_menu(self):
-        for category in CategoryEnum:
-            self.category_filter.addItem(category.value, category)
-        
-        # add a ALL filter in the category enum
-        self.category_filter.addItem("ALL")
-        self.category_filter.setCurrentText("ALL")
-
-    def create_filter_layout(self):
-        def create_filter_group(label, widget):
-            group = QWidget()
-            layout = QVBoxLayout(group)
-            layout.setContentsMargins(0, 0, 0, 0)
-            layout.setSpacing(2)
-            layout.addWidget(label)
-            layout.addWidget(widget)
-            
-            return group
-        # ------------- FILTERS ----------------
-        self.category_filter = ModifiedComboBox()
-        self.status_filter = ModifiedComboBox()
-        self.prod_code_input = QLineEdit()
-        self.ref_no_input = QLineEdit()
-
-        self.prod_code_input.setPlaceholderText("Filter by production code")
-        self.ref_no_input.setPlaceholderText("Filter by reference number")
-
-        # ------------ RESET BTN ----------------
-        self.list_reset_btn = QPushButton("Reset")
-        self.list_reset_btn.setObjectName("endorsementList-reset-btn")
-
-        # --------------- LABELS FOR THE FILTERS ---------------------
-        category_label = QLabel("Category:")
-        status_label = QLabel("Status:")
-        prod_code_label = QLabel("Prod Code:")
-        ref_no_label = QLabel("Ref No:")
-        from_label = QLabel("From:")
-        to_label = QLabel("To:")
-
-        # --------------- DATES ---------------------
-        self.date_from = ModifiedDateEdit(calendarPopup=True)
-        self.date_to = ModifiedDateEdit(calendarPopup=True)
-        self.date_to.setDate(QDate.currentDate())
-
-        # --------------- QPushButton -------------------
-        self.search_button = QPushButton("Search")
-        self.search_button.setObjectName("endorsementList-search-btn")
-
-        # --- Top row filter layout ---
-        top_filter_layout = QHBoxLayout()
-        top_filter_layout.setContentsMargins(0, 0, 0, 0)
-        top_filter_layout.setSpacing(6)
-
-        # --- Bottom row filter layout ---
-        bottom_filter_layout = QHBoxLayout()
-        bottom_filter_layout.setContentsMargins(0, 0, 0, 0)
-        bottom_filter_layout.setSpacing(6)
-        
-        # --------------- SIZE POLICY --------------------
-        category_label.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
-        status_label.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
-        prod_code_label.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
-        ref_no_label.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
-        from_label.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
-        to_label.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
-
-        # --- Top row add widget ---
-        top_filter_layout.addWidget(create_filter_group(category_label, self.category_filter), stretch=1)
-        top_filter_layout.addWidget(create_filter_group(status_label, self.status_filter), stretch=1)
-        top_filter_layout.addWidget(create_filter_group(prod_code_label, self.prod_code_input), stretch=1)
-        top_filter_layout.addWidget(create_filter_group(ref_no_label, self.ref_no_input), stretch=1)
-
-        # --- Bottom row filter layout ---
-        bottom_filter_layout.addWidget(from_label)
-        bottom_filter_layout.addWidget(self.date_from)
-        bottom_filter_layout.addWidget(to_label)
-        bottom_filter_layout.addWidget(self.date_to)
-        bottom_filter_layout.addStretch() # push the search button to the right
-        bottom_filter_layout.addWidget(self.list_reset_btn)
-        bottom_filter_layout.addWidget(self.search_button)
-
-        return (
-            top_filter_layout, 
-            bottom_filter_layout
-        )
-    
-    def filter_function(self):
-        session = self.Session()
-
-        try:
-            ref_no_filter = self.ref_no_input.text().strip()
-            prod_code_filter = self.prod_code_input.text().strip()
-
-            query = session.query(EndorsementCombinedView)
-
-            if ref_no_filter:
-                query = query.filter(EndorsementCombinedView.t_refno.ilike(f"%{ref_no_filter}%"))
-            
-            if prod_code_filter:
-                query = query.filter(EndorsementCombinedView.t_prodcode.ilike(f"%{prod_code_filter}%"))
-
-            if self.date_from.date() <= self.date_to.date():
-                query = query.filter(
-                    EndorsementCombinedView.t_date_endorsed >= self.date_from.date().toPyDate(),
-                    EndorsementCombinedView.t_date_endorsed <= self.date_to.date().toPyDate()
-                )
-            
-            if self.category_filter.currentText() != "ALL":
-                selected_category = self.category_filter.currentData()
-
-                if selected_category:  # Ensure we have valid category data
-                    query = query.filter(EndorsementCombinedView.t_category == selected_category.value)
-            
-            results = query.order_by(EndorsementCombinedView.t_date_endorsed.desc()).all()
-
-            self.table.update_table_with_results(results, apply_pagination=True)
-        finally:
-            session.close()
-
-    def list_reset_callback(self):
-        filter_objects = (
-            self.prod_code_input,
-            self.ref_no_input
-        )
-        
-        for input_widget in filter_objects:
-            if isinstance(input_widget, QLineEdit):
-                input_widget.clear()
-             
-        self.table.load_data()
-
-class EndorsementMainView(QWidget):
-    def __init__(self, session_factory: Callable[..., Session], parent=None):
-        super().__init__(parent)
-        self.Session = session_factory
-        self.setup_ui()
-        self.apply_styles()
-        
-    def setup_ui(self):
-        self.layout = QVBoxLayout()
-
-        # ----------------- Navigation buttons ---------------------
-        nav_layout = QHBoxLayout()
-        self.create_btn = QPushButton("Create New")
-        self.list_btn = QPushButton("View List")
-        self.how_to_use_btn = QPushButton("How To Use")
-        
-        self.create_btn.setObjectName("endorsement-create-btn")
-        self.list_btn.setObjectName("endorsement-list-btn")
-        self.how_to_use_btn.setObjectName("endorsement-how-to-use-btn")
-        
-        nav_layout.addWidget(self.create_btn)
-        nav_layout.addWidget(self.list_btn)
-        nav_layout.addWidget(self.how_to_use_btn)
-        nav_layout.addStretch()
-        
-        # ---------------- Stacked widget for views ---------------------
-        self.stacked_widget = QStackedWidget()
-        
-        # --------------- Create views -----------------------
-        self.create_view = EndorsementCreateView(self.Session)
-        self.list_view = EndorsementListView(self.Session)
-        self.how_to_use_view = HowToUseView()
-        
-        # ---------------- Add to stack --------------------
-        self.stacked_widget.addWidget(self.create_view)
-        self.stacked_widget.addWidget(self.list_view)
-        self.stacked_widget.addWidget(self.how_to_use_view)
-
-        # --------------------- Connect signals -----------------------
-        self.create_btn.clicked.connect(lambda: self.stacked_widget.setCurrentWidget(self.create_view))
-        self.list_btn.clicked.connect(lambda: self.stacked_widget.setCurrentWidget(self.list_view))
-        self.how_to_use_btn.clicked.connect(lambda: self.stacked_widget.setCurrentWidget(self.how_to_use_view))
-        
-        # ----------------------- When a record is selected in list view for editing -------------------------------
-        # self.list_view.table.double_clicked.connect(self.show_update_view)
-        
-        self.layout.addLayout(nav_layout)
-        self.layout.addWidget(self.stacked_widget)
-        self.setLayout(self.layout)
-    
-    def apply_styles(self):
-        qss_path = os.path.join(os.path.dirname(__file__), "styles", "crud_btn.css")
-        
-        load_styles(qss_path, self)
-
-    def show_update_view(self, ref_no):
-        """Load data for editing and switch to update view"""
-        try:
-            session = self.Session()
-            record = session.query(EndorsementModel).filter_by(t_refno=ref_no).first()
-
-            if record:
-                # Populate the update form with record data
-                self.update_view.form.load_data(record)
-                self.stacked_widget.setCurrentWidget(self.update_view)
-        finally:
-            session.close()
-
-
-# HOW TO USE VIEW
-class HowToUseView(QWidget):
-    """Interactive guide for using the endorsement system"""
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setup_ui()
-        self.apply_styles()
-
-    def setup_ui(self):
-        # Main layout with scroll area
-        main_layout = QVBoxLayout(self)
-        scroll_area = QScrollArea()
-        scroll_area.setWidgetResizable(True)
-        
-        # Content container
-        content = QWidget()
-        layout = QVBoxLayout(content)
-        layout.setAlignment(Qt.AlignmentFlag.AlignTop)
-        layout.setSpacing(20)
-        layout.setContentsMargins(20, 20, 20, 20)
-
-        # Title
-        title = QLabel("Endorsement System Guide")
-        title.setStyleSheet("font-size: 18px; font-weight: bold;")
-        layout.addWidget(title)
-
-        # Sections
-        self.add_section(
-            layout,
-            "Creating New Endorsements",
-            "1. Fill all required fields\n"
-            "2. Use proper lot number format (e.g., 1234AB or 1234AB-5678CD)\n"
-            "3. Check 'Has excess' for partial quantities\n"
-            "4. Click 'Save Endorsement' to submit"
-        )
-
-        self.add_section(
-            layout,
-            "Viewing Existing Records",
-            "• Use filters to find specific endorsements\n"
-            "• Double-click any record to view details\n"
-            "• Sort columns by clicking headers"
-        )
-
-        self.add_section(
-            layout,
-            "Common Validation Rules",
-            "• Quantity must match whole lot multiples unless 'Has excess' is checked\n"
-            "• Lot numbers must follow the pattern: 4 digits + 2 letters\n"
-            "• Reference numbers are auto-generated"
-        )
-
-        self.add_video_section(layout)
-        self.add_contact_section(layout)
-
-        scroll_area.setWidget(content)
-        main_layout.addWidget(scroll_area)
-
-    def add_section(self, layout, title, content):
-        """Adds a titled content section"""
-        section_title = QLabel(title)
-        section_title.setStyleSheet("font-size: 14px; font-weight: bold; margin-top: 10px;")
-        
-        content_label = QLabel(content)
-        content_label.setWordWrap(True)
-        content_label.setStyleSheet("margin-left: 10px;")
-        
-        layout.addWidget(section_title)
-        layout.addWidget(content_label)
-
-    def add_video_section(self, layout):
-        """Adds video tutorial placeholder"""
-        section = QWidget()
-        section_layout = QVBoxLayout(section)
-        
-        title = QLabel("Video Tutorials")
-        title.setStyleSheet("font-size: 14px; font-weight: bold; margin-top: 10px;")
-        
-        video_links = [
-            ("Basic Endorsement", "https://example.com/video1"),
-            ("Troubleshooting", "https://example.com/video2"),
-            ("Advanced Features", "https://example.com/video3")
-        ]
-        
-        for text, url in video_links:
-            btn = QPushButton(f"▶ {text}")
-            btn.setCursor(Qt.CursorShape.PointingHandCursor)
-            btn.setStyleSheet("text-align: left; color: #0066cc;")
-            btn.clicked.connect(lambda _, u=url: self.open_url(u))
-            section_layout.addWidget(btn)
-        
-        layout.addWidget(title)
-        layout.addWidget(section)
-
-    def add_contact_section(self, layout):
-        """Adds support contact information"""
-        section = QWidget()
-        section_layout = QVBoxLayout(section)
-        
-        title = QLabel("Need Help?")
-        title.setStyleSheet("font-size: 14px; font-weight: bold; margin-top: 10px;")
-        
-        contacts = [
-            ("IT Support:", "support@masterbatch.com", "mailto:support@example.com"),
-            ("QC Department:", "qc@masterbatch.com", "mailto:qc@example.com"),
-            ("Urgent Issues:", "Ext. 1234", "")
-        ]
-        
-        for label, text, link in contacts:
-            row = QWidget()
-            row_layout = QHBoxLayout(row)
-            row_layout.setContentsMargins(10, 0, 0, 0)
-            
-            lbl = QLabel(label)
-            lbl.setFixedWidth(100)
-            
-            if link:
-                btn = QPushButton(text)
-                btn.setCursor(Qt.CursorShape.PointingHandCursor)
-                btn.setStyleSheet("text-align: left; color: #0066cc; border: none;")
-                btn.clicked.connect(lambda _, u=link: self.open_url(u))
-                row_layout.addWidget(lbl)
-                row_layout.addWidget(btn)
-            else:
-                txt = QLabel(text)
-                row_layout.addWidget(lbl)
-                row_layout.addWidget(txt)
-            
-            section_layout.addWidget(row)
-        
-        layout.addWidget(title)
-        layout.addWidget(section)
-
-    def open_url(self, url):
-        """Handles opening external links"""
-        import webbrowser
-        webbrowser.open(url)
-
-    def apply_styles(self):
-        qss_path = os.path.join(os.path.dirname(__file__), "styles", "how_to_use_view.css")
         load_styles(qss_path, self)

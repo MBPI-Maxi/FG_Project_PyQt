@@ -51,6 +51,11 @@ class RemarksEnum(Enum):
     NO_REMARKS = "No Remarks"
     OVERSIZED = "OVERSIZED"
 
+class PageEnum(Enum):
+    ITEMS_PER_PAGE = 20
+    DEFAULT_CURRENT_PAGE = 1
+    DEFAULT_TOTAL_PAGES = 1
+
 class TableHeader():
     LABELS = {
         "endorsement": [
@@ -77,9 +82,9 @@ class TableHeader():
         ]
     ):
         if not isinstance(header_name, str):
-            raise ValueError("header_name datatype is incorrect.")
+            raise ValueError("header_name datatype is incorrect")
         
         if header_name not in cls.LABELS:
-            raise ValueError("header_name value is not valid.")
+            raise ValueError("header_name value is not valid")
 
         return cls.LABELS.get(header_name)

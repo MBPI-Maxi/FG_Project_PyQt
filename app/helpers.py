@@ -6,6 +6,13 @@ from sqlalchemy.orm import Session, DeclarativeMeta
 from typing import Type, Dict, Any
 from constants.Enums import CategoryEnum
 
+from app.StyledMessage import TerminalCustomStylePrint
+
+# from enum import Enum
+# import json
+# import datetime
+
+
 class ButtonCursorError(BaseException):
     pass
 
@@ -206,3 +213,44 @@ def populate_endorsement_items(
     # Attach to parent model
     endorsement_model.endorsement_t2_items = t2_items
 # ------------------------------------------------------------------------------------------
+
+# ----- IF THE LOT NUMBER IS ALREADY EXISTING ON THE DATABASE HANDLE IT BY JUST PUTTING AN ENTRY ON THE ENDORSEMENT TABLE 2.
+# NOTE: IF THE USER WILL ALSO CHANGE THE WEIGHT PER LOT DO NOT CHANGE THE VALUE ON THE ORIGINAL WEIGHT PER LOT ON TABLE ENDORSEMENT 1
+
+def insert_existing_lot_t2(
+    endorsement_t2_model: Type[DeclarativeMeta]    
+):
+    if not isinstance(endorsement_t2_model, DeclarativeMeta):
+        TerminalCustomStylePrint.raise_red_flag("Argument endorsement_t2_model is incorrect")
+    else:
+        print(True)
+
+
+# def insert_existing_lot_t2(
+#     existing_lot_instance: object,
+#     endorsement_model: Type[DeclarativeMeta]
+# ): 
+#     if isinstance(type(existing_lot_instance), DeclarativeMeta) and isinstance(endorsement_model, DeclarativeMeta):
+#         details = {}
+
+#         for column in endorsement_model.__table__.columns:
+#             key = column.name
+#             value = getattr(existing_lot_instance, key)
+
+#             if isinstance(value, Enum):
+#                 value = value.value
+            
+#             if isinstance(value, (datetime.date, datetime.datetime)):
+#                 value = value.isoformat()
+
+#             details[key] = value
+
+#         detailed_str = json.dumps(details, indent=4, default=str)
+
+#         # TerminalCustomStylePrint.terminal_message_custom_format(detailed_str)
+#         return detailed_str
+#     else:
+#         TerminalCustomStylePrint.raise_red_flag(
+#             f"{insert_existing_lot_t2.__name__} argument/s are incorrect. This is a developer error.",
+#             has_QMessageBox=True
+#         )

@@ -9,7 +9,6 @@ from sqlalchemy import (
     Float, 
     func,
     ForeignKey,
-    BigInteger,
     # UniqueConstraint
 )
 from constants.Enums import CategoryEnum, StatusEnum
@@ -24,7 +23,7 @@ class EndorsementModel(Base):
     t_date_endorsed = Column(Date, nullable=False)
     t_category = Column(Enum(CategoryEnum), nullable=False, default=CategoryEnum.MB.value)
     t_prodcode = Column(String, nullable=False)
-    t_lotnumberwhole = Column(String, nullable=False) # this should be unique
+    t_lotnumberwhole = Column(String, nullable=False, unique=True) # this should be unique
     t_qtykg = Column(Float, nullable=False)
     t_wtlot = Column(Float, nullable=False)
     t_status = Column(Enum(StatusEnum), nullable=False, default=StatusEnum.FAILED.value)

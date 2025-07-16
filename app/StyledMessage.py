@@ -70,3 +70,33 @@ class StyledMessageBox(QMessageBox):
         )
         
         return msg.exec()
+
+
+class TerminalCustomStylePrint():
+    """Utility for styled terminal messages and exceptions"""
+
+    @classmethod
+    def raise_red_flag(cls, message: str, has_QMessageBox=False):
+        """Raises an error in the terminal and optionally on the QMessagebox"""
+        
+        if has_QMessageBox:
+            cls.terminal_message_custom_format(message, is_error=True)
+            
+            raise ValueError(message)
+        else:
+            cls.terminal_message_custom_format(message)
+
+    @staticmethod
+    def terminal_message_custom_format(message: str, is_error=False):
+        """Print a green-colored message in terminal"""
+        
+        if not is_error:
+            print(f"\033[92m{message}\033[0m")
+        else:
+            status = {
+                "error": f"\033[93mValueError:\033[0m", # YELLOW
+                "msg": f"\033[91m{message}\033[0m" # RED
+            }
+
+            print(status["error"], status["msg"])
+            
