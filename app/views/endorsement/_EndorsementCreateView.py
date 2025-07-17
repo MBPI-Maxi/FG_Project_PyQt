@@ -655,17 +655,6 @@ class EndorsementCreateView(QWidget):
             ).first()
 
             if is_lot_existing_t2:
-                # NOTE: THIS IS ALREADY BEING HANDLED IN THE SCHEMA
-                # if "-" in validated_data.t_lotnumberwhole:
-                #     # NOTE: THAT THIS TRANSACTION SHOULD ONLY ACCEPT SINGLE LOT NUMBERS IF THE LOT NUMBER IS ALREADY EXISTING (NOT A WHOLE LOT SCENARIO.)
-                #     StyledMessageBox.warning(
-                #         self,
-                #         "Lot number is existing",
-                #         f"Your lot number input '{validated_data.t_lotnumberwhole}' is not correct. Please use a single lot entry only."
-                #     )
-                    
-                #     return
-
                 # TODO:
                 # PROMPT THE USER THAT AN ITEM IS ALREADY EXISTING ON THE DATABASE
                 # CREATE A MESSAGE BOX TELLING THE EXISTING DATA ON THE USER
@@ -673,31 +662,6 @@ class EndorsementCreateView(QWidget):
                 # ADD A LOGIC FOR CHECKING THE LOT NUMBER INSIDE THE LOT NUMBER 2 AS WELL
                 # CREATE A BAG NUMBER MODEL IN THE DATABASE (DONE)
                 # FIX THE CODE LOGIC HERE
-
-                # details = {} 
-                # # just find the lot numbers in the ENDORSEMENT TABLE 2 COLUMN INSTEAD              
-                # for column in EndorsementModel.__table__.columns:
-                #     key = column.name
-                #     # logic problem here
-                #     value = getattr(is_lot_existing_in_t1, key)
-
-                #     if isinstance(value, Enum):
-                #         value = value.value
-
-                #     if isinstance(value, (datetime.date, datetime.datetime)):
-                #         value = value.isoformat()
-
-                #     details[key] = value
-
-                # detailed_str = json.dumps(details, indent=4, default=str)
-                
-                # TerminalCustomStylePrint.terminal_message_custom_format(detailed_str)
-                # ans_res = StyledMessageBox.question(
-                #     self,
-                #     "Lot number is already existing",
-                #     f"The following lot already exists in the database:\n\n{detailed_str}\n\n"
-                #     "Are you sure you want to continue?"
-                # )
 
                 details = {}
                 for column in self.enodrsement_t2.__table__.columns:
@@ -719,23 +683,27 @@ class EndorsementCreateView(QWidget):
                     "Weight Per Lot": is_lot_existing_t2.endorsement_parent.t_wtlot,
                     "Date Endorsed": is_lot_existing_t2.endorsement_parent.t_date_endorsed.isoformat(),
                     "Has Excess": is_lot_existing_t2.endorsement_parent.t_has_excess,
+                    "Status": is_lot_existing_t2.endorsement_parent.t_status,
                     "Endorsed By": is_lot_existing_t2.endorsement_parent.t_endorsed_by
                 })
-
+                
+                # ----------------- MODIFY THE DETAILS TO BE A JSON STRING FORMAT --------------
                 details_str = json.dumps(details, indent=4, default=str)
                 
+                # --------------- TERMINAL PRINT -------------------
                 TerminalCustomStylePrint.terminal_message_custom_format(
                     details_str
                 )
 
-                ans_res = StyledMessageBox.question(
+                # --------------- MESSAGE BOX FOR LOT --------------
+                lot_already_existing_reply = StyledMessageBox.question(
                     self,
                     "Lot number is already existing",
                     f"The following lot already exists in the database:\n\n{details_str}\n\n"
                     "Are you sure you want to continue?"
                 )
 
-                if ans_res == StyledMessageBox.StandardButton.Yes:
+                if lot_already_existing_reply == StyledMessageBox.StandardButton.Yes:
                     # TODO: if the prompt is yes. omit the lotnumber input of the user. And update the qty of the existing lot number
                     
                     # fetch the details variable here
@@ -756,7 +724,7 @@ class EndorsementCreateView(QWidget):
                     
                     # remove the return statement here after
                     return
-                elif ans_res == StyledMessageBox.StandardButton.No:
+                elif lot_already_existing_reply == StyledMessageBox.StandardButton.No:
                     print("User clicked No")
 
                     # end the process immedietly here 
