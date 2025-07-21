@@ -144,7 +144,8 @@ def populate_endorsement_items(
                         excess_t2_item = endorsement_model_t2(
                             t_refno=validated_data.t_refno,
                             t_lotnumbersingle=lot_code,
-                            t_qty=round(remaining_qty, 2)
+                            t_qty=round(remaining_qty, 2),
+                            t_bag_num=validated_t_bag_num
                         )
                         
                         # Then create the excess item linked to it
@@ -180,7 +181,8 @@ def populate_endorsement_items(
                     endorsement_model_t2(
                         t_refno=validated_data.t_refno,
                         t_lotnumbersingle=validated_lot_number,
-                        t_qty=validated_wtlot
+                        t_qty=validated_wtlot,
+                        t_bag_num=validated_t_bag_num
                     )
                 )
 
@@ -190,7 +192,8 @@ def populate_endorsement_items(
                 excess_t2_item = endorsement_model_t2(
                     t_refno=validated_data.t_refno,
                     t_lotnumbersingle=validated_lot_number,
-                    t_qty=excess
+                    t_qty=excess,
+                    t_bag_num=validated_t_bag_num
                 )
                 
                 # Create and link the excess record

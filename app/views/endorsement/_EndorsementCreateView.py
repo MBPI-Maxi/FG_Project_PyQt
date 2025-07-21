@@ -857,6 +857,9 @@ class EndorsementCreateView(QWidget):
         
         # ---------- Clear endorsed by ----------
         self.t_endorsed_by_input.clearEditText()
+
+        # ---------- Clear endorsed by ----------
+        self.has_excess_checkbox.setChecked(False)
         
         # ------------ Clear error messages ---------------
         self.clear_error_messages()
