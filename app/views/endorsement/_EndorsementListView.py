@@ -88,7 +88,7 @@ class EndorsementListView(QWidget):
         for status in StatusEnum:
             self.status_filter.addItem(status.value, status)
 
-        self.status_filter.addItem("All")
+        self.status_filter.addItem("ALL")
         self.status_filter.setCurrentText("ALL")
 
     def create_filter_layout(self):
@@ -175,35 +175,51 @@ class EndorsementListView(QWidget):
         try:
             ref_no_filter = self.ref_no_input.text().strip()
             prod_code_filter = self.prod_code_input.text().strip()
-            status_code_filter = self.status_filter.currentText().strip()
+            status_code_filter = self.status_filter.currentText().strip().upper()
+            category_filter = self.category_filter.currentText().strip().upper()
 
             query = session.query(self.endorsement_combined_view)
-
+            
+            # ---------------- FILTER LOGIC FOR REFERENCE NUMBER -----------------
             if ref_no_filter:
                 query = query.filter(self.endorsement_combined_view.t_refno.ilike(f"%{ref_no_filter}%"))
             
+            # --------------- FILTER LOGIC FOR PRODUCTION CODE -------------------
             if prod_code_filter:
                 query = query.filter(self.endorsement_combined_view.t_prodcode.ilike(f"%{prod_code_filter}%"))
 
-            if status_code_filter:
+            # -------------- FILTER LOGIC FOR THE STATUS ------------------------
+            if status_code_filter != "ALL":
                 query = query.filter(
                     self.endorsement_combined_view.t_status == status_code_filter
                 )
+            
+            if status_code_filter == "ALL":
+                query = query.filter(
+                    self.endorsement_combined_view.t_status.in_([StatusEnum.PASSED.value, StatusEnum.FAILED.value])
+                )
 
+            # -------------------  FILTER LOGIC FOR THE CATEGORY ----------------------
+            if category_filter != "ALL":
+                selected_category = self.category_filter.currentData()
+
+                if selected_category:  # Ensure we have valid category data
+                    query = query.filter(self.endorsement_combined_view.t_category == selected_category.value)
+
+            if category_filter == "ALL":
+                query = query.filter(
+                    self.endorsement_combined_view.t_category.in_([CategoryEnum.MB.value, CategoryEnum.DC.value])
+                )
+
+            # --------------------  FILTER LOGIC FOR THE DATES -----------------------
             if self.date_from.date() <= self.date_to.date():
                 query = query.filter(
                     self.endorsement_combined_view.t_date_endorsed >= self.date_from.date().toPyDate(),
                     self.endorsement_combined_view.t_date_endorsed <= self.date_to.date().toPyDate()
                 )
             
-            if self.category_filter.currentText() != "ALL":
-                selected_category = self.category_filter.currentData()
-
-                if selected_category:  # Ensure we have valid category data
-                    query = query.filter(self.endorsement_combined_view.t_category == selected_category.value)
-            
+            # UPDATES THE TABLE BY CALLING THE .update_table_with_results in the TableWidget class
             results = query.order_by(self.endorsement_combined_view.t_date_endorsed.desc()).all()
-
             self.table.update_table_with_results(results, apply_pagination=True)
         finally:
             session.close()
@@ -217,5 +233,5 @@ class EndorsementListView(QWidget):
         for input_widget in filter_objects:
             if isinstance(input_widget, QLineEdit):
                 input_widget.clear()
-             
-        self.table.load_data()
+        
+        self.table.reload_table()

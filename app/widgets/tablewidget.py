@@ -14,6 +14,8 @@ from app.helpers import button_cursor_pointer, load_styles
 from app.StyledMessage import StyledMessageBox
 from constants.Enums import TableHeader
 from constants.Enums import PageEnum
+
+from .scrollableTableWidget import ScrollableTableWidget
 import pandas as pd
 import os
 
@@ -69,7 +71,8 @@ class TableWidget(QWidget):
         self.layout = QVBoxLayout(self)
 
         # CREATE THE ACTUAL TABLE HERE
-        self.table = QTableWidget()
+        # self.table = QTableWidget()
+        self.table = ScrollableTableWidget()
         self.table.setObjectName("endorsementTable")
         self.table.setSizePolicy(
             QSizePolicy.Policy.Expanding,
@@ -93,30 +96,30 @@ class TableWidget(QWidget):
         if self.view_type and self.view_type.startswith("endorsement"):
             self.header_labels = TableHeader.get_header("endorsement")
             
-            # CONFIGURE HEADERS (make this dynamic based on the )
+            # -------------- CONFIGURE HEADERS (make this dynamic based on the ) ----------------
             self.table.setColumnCount(len(self.header_labels))
             self.table.setHorizontalHeaderLabels(self.header_labels)
 
         self.table.horizontalHeader().setStretchLastSection(True)
 
-        # CREATING A CONTAINER WIDGET FOR PROPER RESIZING
+        # --------------- CREATING A CONTAINER WIDGET FOR PROPER RESIZING ------------------
         container = QWidget()
         container.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         container.setLayout(QVBoxLayout())
         container.layout().setContentsMargins(0, 0, 0, 0)
         container.layout().addWidget(self.table)
 
-        # ADD SCROLL AREA
+        # --------------- ADD SCROLL AREA --------------------
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
         scroll_area.setWidget(container)
 
         self.layout.addWidget(scroll_area)
 
-        # CONNECT SIGNALS
+        # ---------------- CONNECT SIGNALS ------------------
         self.table.doubleClicked.connect(self.on_row_double_click)
 
-        # Pagination controls
+        # --------------- Pagination controls ------------------
         self.pagination_layout = QHBoxLayout()
         self.prev_btn = QPushButton("Previous")
         self.prev_btn.clicked.connect(self.prev_page)
@@ -135,17 +138,22 @@ class TableWidget(QWidget):
         self.items_per_page_combo.currentIndexChanged.connect(self.update_items_per_page)
         self.items_per_page_combo.setObjectName("table-widget-items-per-page-combo")
 
-        # refresh button
+        # --------------- REFRESH BUTTON ---------------------
         self.refresh_btn = QPushButton("Refresh")
+        self.refresh_btn.setObjectName("tablewidget-refresh-btn")
         self.refresh_btn.clicked.connect(self.reload_table)
 
         self.items_per_page_label = QLabel("Items per page:")
         self.items_per_page_label.setObjectName("table-widget-items-per-page-label")
 
+        # ----------------- TEXT FOR MATCHES FOUND -----------------
+        self.matches_found = QLabel("")
+
         self.pagination_layout.addWidget(self.items_per_page_label)
         self.pagination_layout.addWidget(self.items_per_page_combo)
         self.pagination_layout.addWidget(self.refresh_btn)
         self.pagination_layout.addStretch()
+        
         self.pagination_layout.addWidget(self.prev_btn)
         self.pagination_layout.addWidget(self.page_label)
         self.pagination_layout.addWidget(self.next_btn)
@@ -158,7 +166,17 @@ class TableWidget(QWidget):
         self.layout.addLayout(btn_container)
         self.export_btn.clicked.connect(self.export_to_excel)
 
+    def _add_matches_found(self, result_length: int):
+        if self.view_type not in self.excluded_views_for_show_export_btn:
+            match_string = f"Page {self.current_page} of {self.total_pages} ({result_length} total matches)"
+            
+            self.matches_found.setText(match_string)
+
+            # ----------- INSERT THE MATCHES FOUND AFTER THE REFRESH BUTTON --------------
+            self.pagination_layout.insertWidget(3, self.matches_found)
+
     def reload_table(self):
+        self.matches_found.setText("")
         self.load_data()
 
     def apply_styles(self):
@@ -166,27 +184,30 @@ class TableWidget(QWidget):
         button_cursor_pointer(self.export_btn)
         button_cursor_pointer(self.prev_btn)
         button_cursor_pointer(self.next_btn)
+        button_cursor_pointer(self.refresh_btn)
 
+        # -------------- Always show vertical scrollbar (existing) ----------------
         self.table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOn)
 
-        # This is correct: The scrollbar will appear only if needed
+        # ---------------- This is correct: The scrollbar will appear only if needed ---------------
         self.table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
 
-        # -------------- load the styling here ------------------
-        load_styles(qss_path, self)
-        
         self.table.setAlternatingRowColors(True)
         self.table.setShowGrid(False)
         self.table.verticalHeader().setVisible(False)
         self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
-        self.table.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.table.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        # self.table.setFocusPolicy(Qt.FocusPolicy.NoFocus)
 
-        # Set column widths (adjust as needed)
+        # ---------------- Set column widths (adjust as needed) ---------------------
         for i in range(len(self.header_labels)):
             self.table.setColumnWidth(i, 150)
-            # Add these lines to explicitly set resize mode for each column.
+            # ---------------- Add these lines to explicitly set resize mode for each column. ----------------
             self.table.horizontalHeader().setSectionResizeMode(i, QHeaderView.ResizeMode.Interactive)
+
+        # -------------- load the styling here ------------------
+        load_styles(qss_path, self)
 
     def export_to_excel(self):
         """Export table data to Excel file."""
@@ -322,7 +343,9 @@ class TableWidget(QWidget):
         
         # -------------- Update pagination controls --------------------
         self.update_pagination_controls()
-        self.page_label.setText(f"Page {self.current_page} of {self.total_pages} ({len(results)} total matches)")
+        self._add_matches_found(len(results))
+
+        # call the function here
 
     def _set_table_item(self, row: int, col: int, value: str):
         """Helper method to set table items."""

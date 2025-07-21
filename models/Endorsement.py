@@ -28,7 +28,7 @@ class EndorsementModel(Base):
     t_wtlot = Column(Float, nullable=False)
     t_status = Column(Enum(StatusEnum), nullable=False, default=StatusEnum.FAILED.value)
     t_has_excess = Column(Boolean, default=False, nullable=False)
-    t_bag_num = Column(Integer, nullable=True)
+    # t_bag_num = Column(Integer, nullable=True)
     t_endorsed_by = Column(String, nullable=False)
     t_remarks = Column(String(100), nullable=True)
 
@@ -51,8 +51,15 @@ class EndorsementModelT2(Base):
     t_lotnumbersingle = Column(String(10), nullable=False)
     t_qty = Column(Float, nullable=False)
     # t_has_excess = Column(Boolean, default=False) just omit this because I already have a table for the excess items
+    t_bag_num = Column(Integer, nullable=True)
     is_deleted = Column(Boolean, default=False)
     t_remarks = Column(String(100), nullable=True)
+    is_lot_number_entered = Column(
+        Boolean,
+        nullable=False,
+        default=False,
+        comment="Indicates if the lot number has already been inputted"
+    )
     created_at = Column(DateTime(timezone=True), server_default=func.now()) 
     updated_at = Column(DateTime(timezone=True), server_default=func.now())
     

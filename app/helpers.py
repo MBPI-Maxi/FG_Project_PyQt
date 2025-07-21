@@ -110,7 +110,7 @@ def populate_endorsement_items(
     endorsement_lot_excess_model: Type[DeclarativeMeta],
     validated_data,
     category,
-    has_excess,
+    has_excess
 ):
     t2_items = []
     # excess_items = []
@@ -118,7 +118,8 @@ def populate_endorsement_items(
     validated_lot_number = validated_data.t_lotnumberwhole
     validated_qtykg = validated_data.t_qtykg
     validated_wtlot = validated_data.t_wtlot
-
+    validated_t_bag_num = validated_data.t_bag_num
+ 
     if "-" in validated_lot_number:
         start_num, end_num, suffix = parse_lot_range(validated_lot_number)
         remaining_qty = validated_qtykg
@@ -132,7 +133,8 @@ def populate_endorsement_items(
                         endorsement_model_t2(
                             t_refno=validated_data.t_refno,
                             t_lotnumbersingle=lot_code,
-                            t_qty=validated_wtlot
+                            t_qty=validated_wtlot,
+                            t_bag_num=validated_t_bag_num
                         )
                     )
                     remaining_qty -= validated_wtlot
@@ -162,7 +164,8 @@ def populate_endorsement_items(
                     endorsement_model_t2(
                         t_refno=validated_data.t_refno,
                         t_lotnumbersingle=lot_code,
-                        t_qty=validated_wtlot
+                        t_qty=validated_wtlot,
+                        t_bag_num=validated_t_bag_num
                     )
                 )
     else:
@@ -201,12 +204,13 @@ def populate_endorsement_items(
                 
                 t2_items.append(excess_t2_item)
         else:
-            # No excess logic, just add normally
+            # ---- No excess logic, just add normally ----
             t2_items.append(
                 endorsement_model_t2(
                     t_refno=validated_data.t_refno,
                     t_lotnumbersingle=validated_lot_number,
-                    t_qty=validated_qtykg
+                    t_qty=validated_qtykg,
+                    t_bag_num=validated_t_bag_num
                 )
             )
 

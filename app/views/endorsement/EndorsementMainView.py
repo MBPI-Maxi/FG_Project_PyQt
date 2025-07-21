@@ -14,7 +14,7 @@ from models import (
     User
 )
 
-from app.helpers import load_styles
+from app.helpers import load_styles, button_cursor_pointer
 from app.views.endorsement._EndorsementCreateView import EndorsementCreateView
 from app.views.endorsement._EndorsementListView import EndorsementListView
 from app.views.endorsement._HowToUseView import HowToUseView
@@ -96,6 +96,10 @@ class EndorsementMainView(QWidget):
         current_dir = os.path.dirname(__file__)
         qss_path = os.path.join(current_dir, "..", "styles", "crud_btn.css")
         qss_path = os.path.abspath(qss_path)
+
+        button_cursor_pointer(self.create_btn)
+        button_cursor_pointer(self.list_btn)
+        button_cursor_pointer(self.how_to_use_btn)
         
         load_styles(qss_path, self)
 

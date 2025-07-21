@@ -36,6 +36,7 @@ QHeaderView::section {
     font-weight: bold;
 }
 
+/* vertical scroll bar */
 QScrollBar:vertical {
     border: none;
     background: grey;
@@ -59,9 +60,44 @@ QScrollBar::sub-line:vertical {
     height: 0px;
 }
 
+/* horizontal scroll bar scrolling */
+/* Horizontal Scrollbar Styling */
+QScrollBar:horizontal {
+    /* border: none; */
+    /* background: #f0f0f0; */
+    height: 12px;
+    margin: 0;
+}
+
+QScrollBar::handle:horizontal {
+    background: #c0c0c0;
+    min-width: 20px;
+    /* border-radius: 6px; */
+}
+
+QScrollBar::handle:horizontal:hover {
+    background: #a0a0a0;
+}
+
+QScrollBar::add-line:horizontal,
+QScrollBar::sub-line:horizontal {
+    width: 0;
+    height: 0;
+    background: none;
+}
+
+QScrollBar:left-arrow:horizontal,
+QScrollBar:right-arrow:horizontal {
+    width: 0;
+    height: 0;
+    background: none;
+}
+
+
 QPushButton#endorsement-export-btn {
-    background-color: #3a9eea;  /* Default black background */
-    color: white;            /* White text */
+    /* background-color: #3a9eea;  Default black background */
+    background-color: #3a9eea; 
+    color: white;   
     border: none;
     padding: 8px 16px;
     border-radius: 4px;
@@ -86,8 +122,8 @@ QPushButton#tablewidget-next-btn {
 
 QPushButton#tablewidget-prev-btn:hover
 QPushButton#tablewidget-next-btn:hover {
-    /* background-color: #31b0d5; */
-    background-color: #3a9eea;
+    background-color: #317dc4;
+    color: white;
 }
 
 QPushButton#tablewidget-prev-btn:disabled,
@@ -123,3 +159,16 @@ QLabel#table-widget-page-label {
 QLabel#table-widget-items-per-page-label {
     padding-left: 5px;
 }
+
+QPushButton#tablewidget-refresh-btn {
+    background-color: #3a9eea;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+}
+QPushButton#tablewidget-refresh-btn:hover {
+    background-color: #317dc4;
+    color: white;
+}
+

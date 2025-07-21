@@ -24,7 +24,8 @@ from app.widgets import (
     TableWidget,
     LotNumberLineEdit,
     ModifiedDateEdit,
-    ModifiedDoubleSpinBox
+    ModifiedDoubleSpinBox,
+    ModifiedCheckbox
 )
 
 from PyQt6.QtCore import Qt, QDate
@@ -60,7 +61,7 @@ class EndorsementCreateView(QWidget):
         
         self.Session = session_factory
         self.endorsement_t1 = endorsement_t1
-        self.enodrsement_t2 = endorsement_t2
+        self.endorsement_t2 = endorsement_t2
         self.endorsement_combined_view = endorsement_combined_view
         self.endorsement_lot_excess = endorsement_lot_excess
         self.endorsement_form_schema = endorsement_form_schema
@@ -413,7 +414,7 @@ class EndorsementCreateView(QWidget):
         self.t_refno_input.setDisabled(True)
 
         # ------------------ Excess checkbox -----------------------
-        self.has_excess_checkbox = QCheckBox("Has excess")
+        self.has_excess_checkbox = ModifiedCheckbox("Has excess")
         self.has_excess_checkbox.setObjectName("endorsement-has-excess-checkbox")
 
         refno_container = QWidget()
@@ -551,7 +552,7 @@ class EndorsementCreateView(QWidget):
             "t_status": self.t_status_input.currentData(), # Retrieves the stored Enum object
             "t_endorsed_by": self.t_endorsed_by_input.currentText(),
             "t_has_excess": self.has_excess_checkbox.isChecked(),
-            "t_bag_num": self.t_bag_num_input.value(),
+            "t_bag_num": self.t_bag_num_input.value(), # this is being excluded if this is a fresh
             "t_remarks": self.t_remarks_by_input.currentText()
         }
 
@@ -619,6 +620,50 @@ class EndorsementCreateView(QWidget):
                     # Fallback - show in status bar or as a message box
                     StyledMessageBox.warning(self, "Validation Error", message)
                     return
+    
+    def set_message_existing_record(self, endorsement_t2_existing_model: Type[DeclarativeMeta]) -> str:
+        endorsement_parent_record = endorsement_t2_existing_model.endorsement_parent
+        
+        # details = {
+        #     "Reference Number": endorsement_t2_existing_model.t_refno,
+        #     "Production Code": endorsement_parent_record.t_prodcode,
+        #     "Date Endorsed": endorsement_parent_record.t_date_endorsed,
+        #     "Category": endorsement_parent_record.t_category,
+        #     "Qty": endorsement_t2_existing_model.t_qty,
+        #     "Lot number single": endorsement_t2_existing_model.t_lotnumbersingle,
+        #     "Lot number whole": endorsement_parent_record.t_lotnumberwhole,
+        #     "Endorsed By": endorsement_parent_record.t_endorsed_by,
+        #     "Status": endorsement_parent_record.t_status
+        # }
+
+        # detailed_str = json.dumps(details, indent=4, default=str)
+
+        #Handle enum display cleanly
+        category = (
+            endorsement_parent_record.t_category.value
+            if hasattr(endorsement_parent_record.t_category, "value")
+            else str(endorsement_parent_record.t_category)
+        )
+        status = (
+            endorsement_parent_record.t_status.value
+            if hasattr(endorsement_parent_record.t_status, "value")
+            else str(endorsement_parent_record.t_status)
+        )
+
+        # -------------- THIS WILL BE DISPLAYED IN THE TEXT IN THE QMESSAGEBOX ----------------
+        message = (
+            f"<br><br><b>Reference Number:</b> {endorsement_t2_existing_model.t_refno}<br>"
+            f"<b>Production Code:</b> {endorsement_parent_record.t_prodcode}<br>"
+            f"<b>Date Endorsed:</b> {endorsement_parent_record.t_date_endorsed.strftime('%Y-%m-%d')}<br>"
+            f"<b>Category:</b> {category}<br>"
+            f"<b>Quantity:</b> {endorsement_t2_existing_model.t_qty}<br>"
+            f"<b>Lot Number (Single):</b> {endorsement_t2_existing_model.t_lotnumbersingle}<br>"
+            f"<b>Lot Number (Whole):</b> {endorsement_parent_record.t_lotnumberwhole}<br>"
+            f"<b>Endorsed By:</b> {endorsement_parent_record.t_endorsed_by}<br>"
+            f"<b>Status:</b> {status}<br><br>"
+        )
+
+        return message
 
     def save_endorsement(self):
         """Collects form data, validates it using Pydantic, and handles the result."""
@@ -640,7 +685,7 @@ class EndorsementCreateView(QWidget):
                 form_data, 
                 session,
                 endorsement_model_t1=self.endorsement_t1,
-                endorsement_model_t2=self.enodrsement_t2
+                endorsement_model_t2=self.endorsement_t2
             )
 
             # --------------------------------------------------------------------------
@@ -651,98 +696,75 @@ class EndorsementCreateView(QWidget):
             #     EndorsementModel.t_lotnumberwhole == validated_data.t_lotnumberwhole
             # ).first()
 
-            is_lot_existing_t2 = session.query(self.enodrsement_t2).filter(
-                self.enodrsement_t2.t_lotnumbersingle == validated_data.t_lotnumberwhole
+            is_lot_existing_t2 = session.query(self.endorsement_t2).filter(
+                self.endorsement_t2.t_lotnumbersingle == validated_data.t_lotnumberwhole
             ).first()
 
             if is_lot_existing_t2:
                 # TODO:
-                # PROMPT THE USER THAT AN ITEM IS ALREADY EXISTING ON THE DATABASE
-                # CREATE A MESSAGE BOX TELLING THE EXISTING DATA ON THE USER
-                # CREATE A FUNCTION HERE THAT OMITS THE WHOLE ENTRY AND JUST UPDATE THE t_qtykg on the endorsement table 1
                 # ADD A LOGIC FOR CHECKING THE LOT NUMBER INSIDE THE LOT NUMBER 2 AS WELL
                 # CREATE A BAG NUMBER MODEL IN THE DATABASE (DONE)
                 # FIX THE CODE LOGIC HERE
                 
-                # NOTE: HERE INSTEAD OF ITERATING A THE COLUMNS JUST MAKE A COPY OF THE VALIDATED DATA THEN CREATE THE MESSAGE BOX FROM THERE. 
-                # JUST USE THE is_lot_existing_t2.endorsement_parent to specify the columns from endorsement_table_1
-                details = {}
-                for column in self.enodrsement_t2.__table__.columns:
-                    key = column.name
-                    
-                    if key in (("t_refno", "t_lotnumbersingle", "t_qty")):
-                        value = getattr(is_lot_existing_t2, key)
-                        
-                        details[key] = value
-                
-                # --------- UPDATE THE KEY NAMES HERE FOR USER TO SEE --------
-                # NOTE: THAT IF THE COLUMNS BECOME BIG ITERATE THRU IT
-                details["Reference No"] = details.pop("t_refno")
-                details["Lot Number"] = details.pop("t_lotnumbersingle")
-                details["Quantity"] = details.pop("t_qty") 
-
-                # -------- UPDATE THE DATA HERE --------
-                details.update({
-                    "Weight Per Lot": is_lot_existing_t2.endorsement_parent.t_wtlot,
-                    "Date Endorsed": is_lot_existing_t2.endorsement_parent.t_date_endorsed.isoformat(),
-                    "Has Excess": is_lot_existing_t2.endorsement_parent.t_has_excess,
-                    "Endorsed By": is_lot_existing_t2.endorsement_parent.t_endorsed_by
-                })
-
-                details_str = json.dumps(details, indent=4, default=str)
-                
-                TerminalCustomStylePrint.terminal_message_custom_format(
-                    details_str
-                )
-
+                string_representation = self.set_message_existing_record(is_lot_existing_t2)
                 ans_res = StyledMessageBox.question(
                     self,
                     "Lot number is already existing",
-                    f"The following lot already exists in the database:\n\n{details_str}\n\n"
-                    "Are you sure you want to continue?"
+                    f"The following lot already exists in the database:\n\n{string_representation}\n\n"
+                    "Are you sure you want to continue?",
+                    setTextFormat=True
                 )
 
-                # make this into a method function in this class
                 if ans_res == StyledMessageBox.StandardButton.Yes:
                     # TODO: if the prompt is yes. omit the lotnumber input of the user. And update the qty of the existing lot number
                     
                     # fetch the details variable here
+                    endorsement_parent = is_lot_existing_t2.endorsement_parent
 
-                    # UPDATE THE VALUE HERE OF THE QTY IN THE MAIN ENDORSEMENT TABLE 1
+                     # UPDATE THE VALUE HERE OF THE QTY IN THE MAIN ENDORSEMENT TABLE 1
                     # increment the value here
+                    endorsement_parent.t_qtykg += validated_data.t_qtykg
+
+                    # ---------------- SPECIFY ON THE is_lot_existing_t2 on the is_lot_number_entered column and set it to true --------------------
+                    is_lot_existing_t2.is_lot_number_entered = True
                     # is_lot_existing_in_t1.t_qtykg += validated_data.t_qtykg
 
                     # CREATE A NEW OBJECT ON THE ENDORSEMENT TABLE 2 WITH THAT DATA.
                     # NOTE: THAT THE ENDORSEMENT REFERENCE NUMBER SHOULD BE THE is_lot_existing_t1.ref_no
-                    # SHOULD BE A SINGLE ENTRY 
-                    # endorsement_t2 = EndorsementModelT2(
-                        
-                    # )
-                    # insert_existing_lot_t2("test")
-
-                    print("User clicked Yes")
                     
-                    # remove the return statement here after
-                    return
+                    t2_new_instance = self.endorsement_t2(
+                        t_refno=is_lot_existing_t2.t_refno,
+                        t_lotnumbersingle=validated_data.t_lotnumberwhole,
+                        t_qty=validated_data.t_qtykg,
+                        is_lot_number_entered=True
+                    )
+
+                    # endorsement_t2_items from endorsement t1 is a collection of related reference number
+                    endorsement_parent.endorsement_t2_items.append(t2_new_instance)
+                    session.add(t2_new_instance)
                 elif ans_res == StyledMessageBox.StandardButton.No:
-                    print("User clicked No")
+                    session.rollback()
 
-                    # end the process immedietly here 
-                    # NOTE: that if the user presses the x button on the question box it is interpreted as 'No' as well
+                    # display a qmessagebox here for information
+                    StyledMessageBox.information(
+                        self,
+                        "Transaction Cancelled",
+                        "Transaction has been cancelled"
+                    )
+                    
                     return
-
             else:
                 # if the lot is not existing just proceed as expected. 
                 # and just proceed in including it in the database.
-                print(False)
 
                 # print(validated_data.model_dump_json(indent=2)) 
                 # ------------- if the form is valid store this in the database. ---------------------
-                endorsement = self.endorsement_t1(**validated_data.model_dump())
+                # NOTE: exclude the t_bag_num because we will move the t_bag_num in endorsement t2 model
+                endorsement = self.endorsement_t1(**validated_data.model_dump(exclude={"t_bag_num"}))
                     
                 populate_endorsement_items(
                     endorsement_model=endorsement,
-                    endorsement_model_t2=self.enodrsement_t2,
+                    endorsement_model_t2=self.endorsement_t2,
                     endorsement_lot_excess_model=self.endorsement_lot_excess,
                     validated_data=validated_data,
                     category=self.t_category_input.currentText(),
@@ -783,6 +805,7 @@ class EndorsementCreateView(QWidget):
             session.rollback()
 
         except Exception as e:
+            print(e)
             StyledMessageBox.critical(
                 self,
                 "Error",
