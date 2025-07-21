@@ -59,7 +59,7 @@ def add_new_user(
     return new_user
 
 
-# FOR CREATING THE T_REF_NO on the views
+# FOR CREATING THE T_REF_NO on the user display 
 def fetch_current_t_refno_in_endorsement(
     session: Session, 
     endorsement_model: Type[DeclarativeMeta]
