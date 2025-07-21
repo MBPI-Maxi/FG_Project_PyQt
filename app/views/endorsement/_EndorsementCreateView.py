@@ -686,20 +686,16 @@ class EndorsementCreateView(QWidget):
                     "Weight Per Lot": is_lot_existing_t2.endorsement_parent.t_wtlot,
                     "Date Endorsed": is_lot_existing_t2.endorsement_parent.t_date_endorsed.isoformat(),
                     "Has Excess": is_lot_existing_t2.endorsement_parent.t_has_excess,
-                    "Status": is_lot_existing_t2.endorsement_parent.t_status,
                     "Endorsed By": is_lot_existing_t2.endorsement_parent.t_endorsed_by
                 })
-                
-                # ----------------- MODIFY THE DETAILS TO BE A JSON STRING FORMAT --------------
+
                 details_str = json.dumps(details, indent=4, default=str)
                 
-                # --------------- TERMINAL PRINT -------------------
                 TerminalCustomStylePrint.terminal_message_custom_format(
                     details_str
                 )
 
-                # --------------- MESSAGE BOX FOR LOT --------------
-                lot_already_existing_reply = StyledMessageBox.question(
+                ans_res = StyledMessageBox.question(
                     self,
                     "Lot number is already existing",
                     f"The following lot already exists in the database:\n\n{details_str}\n\n"
@@ -728,7 +724,7 @@ class EndorsementCreateView(QWidget):
                     
                     # remove the return statement here after
                     return
-                elif lot_already_existing_reply == StyledMessageBox.StandardButton.No:
+                elif ans_res == StyledMessageBox.StandardButton.No:
                     print("User clicked No")
 
                     # end the process immedietly here 
