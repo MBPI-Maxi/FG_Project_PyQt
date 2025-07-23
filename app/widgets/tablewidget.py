@@ -7,6 +7,7 @@ from PyQt6.QtWidgets import (
 )
 
 from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtGui import QColor
 
 from typing import Union, Callable, Type, Literal
 from sqlalchemy.orm import Session, DeclarativeMeta
@@ -37,8 +38,18 @@ class TableWidget(QWidget):
         items_per_page = PageEnum.ITEMS_PER_PAGE.value # New: items per page for pagination
     ):
         super().__init__(parent)
+
+        # NOTE: The reason this is needed to be defined here because we need to control the display in the UI
+        # ---------------- EXPORT EXCEL BUTTON ------------------
         self.export_btn = QPushButton("Export Excel")
         self.export_btn.setObjectName("endorsement-export-btn")
+
+        # --------------- FINALIZE BUTTON ---------------------
+        self.finalize_btn = QPushButton("Finalize Table")
+        self.finalize_btn.setObjectName("tablewidget-finalize-btn")
+        # NOTE: IF THE FINALIZED TABLE IS BEEN CLICKED CREATE A TABLE(SEPARATE WIDGET) TO CONFIRM A THE SECTION ONCE CLICK IT WILL STORE THE EXISTING DATA ON THE DATABASE
+        # self.finalize_btn.clicked.connect(lambda: print("finalized btn has been clicked"))
+        self.finalize_btn.clicked.connect(self.finalized_button_logic)
 
         self.valid_views_to_show_export_btn = [
             "endorsement-list",
@@ -50,6 +61,7 @@ class TableWidget(QWidget):
 
         if view_type in self.excluded_views_for_show_export_btn:
             self.export_btn.hide()
+            self.finalize_btn.hide()
 
         self.Session = session_factory
         self.db_model = db_model
@@ -87,7 +99,7 @@ class TableWidget(QWidget):
         # THIS IS FOR HAVING A RIGHT CLICK BUTTON THE ROWS
         self.table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.table.customContextMenuRequested.connect(self.show_context_menu)
-
+        
         # self.table.setHorizontalHeaderLabels()
 
         # IF ELSE STATEMENT HERE TO CHANGE THE COLUMN BASED ON CONDITION
@@ -99,6 +111,7 @@ class TableWidget(QWidget):
             # -------------- CONFIGURE HEADERS (make this dynamic based on the ) ----------------
             self.table.setColumnCount(len(self.header_labels))
             self.table.setHorizontalHeaderLabels(self.header_labels)
+        # elif self.view_type and self.view_type.startswith("")
 
         self.table.horizontalHeader().setStretchLastSection(True)
 
@@ -152,8 +165,10 @@ class TableWidget(QWidget):
         self.pagination_layout.addWidget(self.items_per_page_label)
         self.pagination_layout.addWidget(self.items_per_page_combo)
         self.pagination_layout.addWidget(self.refresh_btn)
-        self.pagination_layout.addStretch()
         
+        # STRETCH IN THE FAR RIGHT OF THE SCREEN
+        self.pagination_layout.addStretch()
+
         self.pagination_layout.addWidget(self.prev_btn)
         self.pagination_layout.addWidget(self.page_label)
         self.pagination_layout.addWidget(self.next_btn)
@@ -162,7 +177,11 @@ class TableWidget(QWidget):
 
         btn_container = QHBoxLayout()
         btn_container.addWidget(self.export_btn)
+        btn_container.addWidget(self.finalize_btn)
+
+        # STRECT IN THE FAR RIGHT OF THE SCREEN
         btn_container.addStretch()
+
         self.layout.addLayout(btn_container)
         self.export_btn.clicked.connect(self.export_to_excel)
 
@@ -185,6 +204,7 @@ class TableWidget(QWidget):
         button_cursor_pointer(self.prev_btn)
         button_cursor_pointer(self.next_btn)
         button_cursor_pointer(self.refresh_btn)
+        button_cursor_pointer(self.finalize_btn)
 
         # -------------- Always show vertical scrollbar (existing) ----------------
         self.table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOn)
@@ -257,6 +277,14 @@ class TableWidget(QWidget):
                 f"Export failed: {str(e)}"
             )
 
+    def finalized_button_logic(self):
+        StyledMessageBox.information(
+            self,
+            "Show",
+            "Show a table widget summarization"
+        )
+        return
+
     def load_data(self):
         """Load data from the endorsement_combined view with pagination."""
         try:
@@ -287,7 +315,7 @@ class TableWidget(QWidget):
 
                 self.table.setRowCount(len(results))
                 
-                # Correct column mapping (0-7)
+                # Correct column mapping (0-10)
                 for row_idx, record in enumerate(results):
                     self._set_table_item(row_idx, 0, record.t_refno)
                     self._set_table_item(row_idx, 1, record.t_date_endorsed.strftime("%Y-%m-%d"))  # Fixed column index
@@ -296,9 +324,13 @@ class TableWidget(QWidget):
                     self._set_table_item(row_idx, 4, record.t_lot_number)
                     self._set_table_item(row_idx, 5, f"{float(record.t_total_quantity):.2f}")
                     self._set_table_item(row_idx, 6, record.t_status)
-                    self._set_table_item(row_idx, 7, record.t_endorsed_by)
-                    self._set_table_item(row_idx, 8, record.t_source_table)
-                    self._set_table_item(row_idx, 9, record.t_has_excess)
+                    self._set_table_item(row_idx, 7, record.t_bag_num if record.t_bag_num else "No Bag no.")
+                    self._set_table_item(row_idx, 8, record.t_endorsed_by)
+                    self._set_table_item(row_idx, 9, record.t_source_table)
+                    self._set_table_item(row_idx, 10, record.t_has_excess)
+
+                    # After populating the row, apply color if the status is FAILED
+                    self._set_color_for_failed_items(row_idx, record)
 
                 self.update_pagination_controls()
         except Exception as e:
@@ -337,15 +369,27 @@ class TableWidget(QWidget):
             self._set_table_item(row_idx, 4, record.t_lot_number)
             self._set_table_item(row_idx, 5, f"{float(record.t_total_quantity):.2f}")
             self._set_table_item(row_idx, 6, record.t_status)
-            self._set_table_item(row_idx, 7, record.t_endorsed_by)
-            self._set_table_item(row_idx, 8, record.t_source_table)
-            self._set_table_item(row_idx, 9, record.t_has_excess)
-        
+            self._set_table_item(row_idx, 7, record.t_bag_num if record.t_bag_num else "No Bag no.")
+            self._set_table_item(row_idx, 8, record.t_endorsed_by)
+            self._set_table_item(row_idx, 9, record.t_source_table)
+            self._set_table_item(row_idx, 10, record.t_has_excess)
+
+            #  -------------- After populating the row, apply color if the status is FAILED --------------
+            self._set_color_for_failed_items(row_idx, record)
+                    
         # -------------- Update pagination controls --------------------
         self.update_pagination_controls()
         self._add_matches_found(len(results))
 
-        # call the function here
+    def _set_color_for_failed_items(self, row: int, record: Type[DeclarativeMeta]):
+        if record.t_status and str(record.t_status).lower() == "failed":
+            failed_text_color = QColor(255, 102, 102)
+
+            for col_idx in range(self.table.columnCount()):
+                item = self.table.item(row, col_idx)
+
+                if item:
+                    item.setForeground(failed_text_color)
 
     def _set_table_item(self, row: int, col: int, value: str):
         """Helper method to set table items."""
@@ -367,22 +411,29 @@ class TableWidget(QWidget):
 
         # ------------ EXTRACT SPECIFIC VALUES FROM THE ROW -----------
         # ------------- the number should match the index based on the table layout -----------------
-        ref_no = self.table.item(row, 0).text() if self.table.item(row, 0) else "N/A"
-        product_code = self.table.item(row, 3).text() if self.table.item(row, 3) else "N/A"
+        # ------------- NOTE: MATCH THE VALUE IN THE TABLE HEADER 
+        ref_no_index = TableHeader.get_header_index("endorsement",  "ref no")
+        prod_code_index = TableHeader.get_header_index("endorsement", "product code")
+
+        ref_no = self.table.item(row, ref_no_index).text() if self.table.item(row, ref_no_index) else "N/A"
+        product_code = self.table.item(row, prod_code_index).text() if self.table.item(row, prod_code_index) else "N/A"
 
         # ----------- Create the menu -----------
         menu = QMenu(self)
 
         # --------- Add actions -----------
         edit_action = menu.addAction("Edit Record")
-        # delete_action = menu.addAction("Delete Record")
-        # add_action = menu.addAction("Add New Record")
+        show_related_items = menu.addAction("Show Related Items")
 
         # Connect actions to functions
-        # TODO: Add a dialog box before they edit anything
-        edit_action.triggered.connect(lambda: print(f"Edit action triggered - Row: {row}, Ref No: {ref_no}, Product Code: {product_code}"))
+        edit_action.triggered.connect(
+            lambda: print(f"Edit action triggered - Row: {row}, Ref No: {ref_no}, Product Code: {product_code}")
+        )
+        show_related_items.triggered.connect(
+            lambda: print(f"Show related items has been triggered fetch the data relating to this row number")
+        )
 
-        # Show the menu at the cursor position
+        # ------------- Show the menu at the cursor position --------------
         menu.exec(self.table.viewport().mapToGlobal(pos))
     
     def show_edit_confirmation_message(self):

@@ -71,15 +71,18 @@ class EndorsementCreateView(QWidget):
         self.init_ui()
         self.apply_styles()
 
-    def init_ui(self):
-        # ------------ HELPER FUNCTION IN CREATING INPUT ROWS ------------
-        # NOTE: MAKE THIS INTO A STATICMETHOD FUNCTION INSTEAD. SHOULD BE NO INNER FUNCTION ON A METHOD
-        def create_input_row(
+    @staticmethod
+    def create_input_row(
             label_text: str,
             widget: Type[QWidget],
             field_name: str,
-            error_label_name: str
+            error_label_name: str,
+            parent: Type[QWidget]
         ):
+            """
+            Info:
+                Helper function in creating input rows
+            """
             # ------------ Main container for the entire row -------------
             row_container = QWidget()
             row_layout = QHBoxLayout(row_container)
@@ -115,11 +118,27 @@ class EndorsementCreateView(QWidget):
             row_layout.setStretch(2, 1)  # Let error label expand
             
             # -----------------  Store references -------------------------
-            self.form_fields[field_name] = widget
-            self.form_fields[error_label_name] = error_label
+            parent.form_fields[field_name] = widget
+            parent.form_fields[error_label_name] = error_label
             
-            self.main_layout.addWidget(row_container)
+            parent.main_layout.addWidget(row_container)
+    
+    @staticmethod
+    def toggle_lot_number_mask(state: int, parent: Type[QWidget]) -> None:
+        checked_state = 2
+        unchecked_state = 0
+        
+        parent.t_lotnumberwhole_input.clear()
 
+        if state == checked_state:
+            parent.t_lotnumberwhole_input.setInputMask("0000AA-0000AA; ")
+        elif state == unchecked_state:
+            parent.t_lotnumberwhole_input.setInputMask("0000AA; ")
+        
+        parent.t_lotnumberwhole_input.setFocus()
+        parent.t_lotnumberwhole_input.setCursorPosition(0)
+
+    def init_ui(self):
         # -------------------  Main container with vertical layout ----------------------------
         form_container = QWidget()
         self.main_layout = QVBoxLayout(form_container)
@@ -136,17 +155,19 @@ class EndorsementCreateView(QWidget):
         form_scroll.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
     
         # -------------   Create all form rows with scrollable inputs --------------------------
-        self.create_t_refno_row(create_input_row)
-        self.create_date_endorsed_row(create_input_row)
-        self.create_category_row(create_input_row)
-        self.create_prod_code_row(create_input_row)
-        self.create_lot_number_row(create_input_row)
-        self.create_weight_per_lot_row(create_input_row)
-        self.create_qtykg_row(create_input_row)
-        self.create_bag_input_row(create_input_row)
-        self.create_status_row(create_input_row)
-        self.create_endorsed_by_input_row(create_input_row)
-        self.create_remarks_input_row(create_input_row)
+        input_row_func = self.create_input_row
+
+        self.create_t_refno_row(input_row_func)
+        self.create_date_endorsed_row(input_row_func)
+        self.create_category_row(input_row_func)
+        self.create_prod_code_row(input_row_func)
+        self.create_lot_number_row(input_row_func)
+        self.create_weight_per_lot_row(input_row_func)
+        self.create_qtykg_row(input_row_func)
+        self.create_bag_input_row(input_row_func)
+        self.create_status_row(input_row_func)
+        self.create_endorsed_by_input_row(input_row_func)
+        self.create_remarks_input_row(input_row_func)
 
         # --------------  Add save button (outside the scroll area) -------------------------
         self.save_button = QPushButton("Save Endorsement")
@@ -352,29 +373,16 @@ class EndorsementCreateView(QWidget):
     # ---------------- for lot number row ---------------
     def create_lot_number_row(
         self, 
-        create_input_row: Callable[[str, Union[QWidget, QLineEdit], str, str], None]
+        create_input_row: Callable[[str, Union[QWidget, QLineEdit], str, str, QWidget], None]
     ) -> None:
         self.t_use_whole_lot_checkbox = QCheckBox("Whole Lot")
         self.t_use_whole_lot_checkbox.setObjectName("endorsement-toggle-lot")
         
         self.t_lotnumberwhole_input = LotNumberLineEdit()
         
-        def toggle_lot_number_mask(state) -> None:
-            checked_state = 2
-            unchecked_state = 0
-
-            self.t_lotnumberwhole_input.clear()
-
-            if state == checked_state:
-                self.t_lotnumberwhole_input.setInputMask("0000AA-0000AA; ")
-                
-            elif state == unchecked_state:
-                self.t_lotnumberwhole_input.setInputMask("0000AA; ")
-            
-            self.t_lotnumberwhole_input.setFocus()
-            self.t_lotnumberwhole_input.setCursorPosition(0)
-
-        self.t_use_whole_lot_checkbox.stateChanged.connect(toggle_lot_number_mask)
+        self.t_use_whole_lot_checkbox.stateChanged.connect(
+            lambda state: self.toggle_lot_number_mask(state, self)
+        )
 
         # ------------- default -------------------
         self.t_lotnumberwhole_input.setInputMask("0000AA; ")
@@ -392,22 +400,34 @@ class EndorsementCreateView(QWidget):
         lot_input_widget.setLayout(lot_inline_layout)
 
         # return lot_input_widget
-        create_input_row("Whole Lot Number", lot_input_widget, "t_lotnumberwhole", "t_lotnumberwhole_error")
+        create_input_row(
+            "Whole Lot Number", 
+            lot_input_widget, 
+            "t_lotnumberwhole", 
+            "t_lotnumberwhole_error",
+            parent=self
+        )
     
     def create_date_endorsed_row(
         self, 
-        create_input_row: Callable[[str, Union[QWidget, QLineEdit], str, str], None]
+        create_input_row: Callable[[str, Union[QWidget, QLineEdit], str, str, QWidget], None]
     ) -> None:
         # ------------------ self.t_date_endorsed_input = QDateEdit(calendarPopup=True) -------------------
         self.t_date_endorsed_input = ModifiedDateEdit(calendarPopup=True)
         self.t_date_endorsed_input.setDate(QDate.currentDate())
         self.t_date_endorsed_input.setObjectName("endorsement-date-endorsed-input")
 
-        create_input_row("Date Endorsed:", self.t_date_endorsed_input, "t_date_endorsed", "t_date_endorsed_error")
+        create_input_row(
+            "Date Endorsed:", 
+            self.t_date_endorsed_input, 
+            "t_date_endorsed", 
+            "t_date_endorsed_error",
+            parent=self
+        )
 
     def create_t_refno_row(
         self, 
-        create_input_row: Callable[[str, Union[QWidget, QLineEdit], str, str], None]
+        create_input_row: Callable[[str, Union[QWidget, QLineEdit], str, str, QWidget], None]
     ) -> None:
         self.t_refno_input = QLineEdit()
         self.t_refno_input.setObjectName("endorsement-refno-input")
@@ -430,24 +450,36 @@ class EndorsementCreateView(QWidget):
             reference_num = fetch_current_t_refno_in_endorsement(session, self.endorsement_t1)
             
             self.t_refno_input.setText(reference_num)
-            create_input_row("Reference Number:", refno_container, "t_refno", "t_refno_error")   
+            create_input_row(
+                "Reference Number:", 
+                refno_container, 
+                "t_refno", 
+                "t_refno_error",
+                parent=self
+            )   
         finally:
             session.close()
     
     def create_category_row(
         self, 
-        create_input_row: Callable[[str, Union[QWidget, QLineEdit], str, str], None]
+        create_input_row: Callable[[str, Union[QWidget, QLineEdit], str, str, QWidget], None]
     ) -> None:
         self.t_category_input = ModifiedComboBox()
         
         for category in CategoryEnum:
             self.t_category_input.addItem(category.value, category)
         
-        create_input_row("Category:", self.t_category_input, "t_category", "t_category_error")
+        create_input_row(
+            "Category:", 
+            self.t_category_input, 
+            "t_category", 
+            "t_category_error",
+            parent=self
+        )
     
     def create_prod_code_row(
         self, 
-        create_input_row: Callable[[str, Union[QWidget, QLineEdit], str, str], None]
+        create_input_row: Callable[[str, Union[QWidget, QLineEdit], str, str, QWidget], None]
     ) -> None:
         self.t_prodcode_input = ModifiedComboBox()
         self.t_prodcode_input.addItems([
@@ -456,22 +488,34 @@ class EndorsementCreateView(QWidget):
             "PlaceholderTest3"
         ])
 
-        create_input_row("Product Code:", self.t_prodcode_input, "t_prodcode", "t_prodcode_error")
+        create_input_row(
+            "Product Code:", 
+            self.t_prodcode_input, 
+            "t_prodcode", 
+            "t_prodcode_error",
+            parent=self
+        )
     
     def create_weight_per_lot_row(
         self, 
-        create_input_row: Callable[[str, Union[QWidget, QLineEdit], str, str], None]
+        create_input_row: Callable[[str, Union[QWidget, QLineEdit], str, str, QWidget], None]
     ) -> None:
         self.t_wtlot_input = ModifiedDoubleSpinBox()
         self.t_wtlot_input.setMinimum(0.01) # Pydantic gt=0, so min here can be slightly above 0
         self.t_wtlot_input.setMaximum(999999999.99)
         self.t_wtlot_input.setDecimals(2)
 
-        create_input_row("Weight per Lot:", self.t_wtlot_input, "t_wtlot", "t_wtlot_error")
+        create_input_row(
+            "Weight per Lot:", 
+            self.t_wtlot_input, 
+            "t_wtlot", 
+            "t_wtlot_error",
+            parent=self
+        )
 
     def create_qtykg_row(
         self, 
-        create_input_row: Callable[[str, Union[QWidget, QLineEdit], str, str], None]
+        create_input_row: Callable[[str, Union[QWidget, QLineEdit], str, str, QWidget], None]
     ) -> None:
         self.t_qtykg_input = ModifiedDoubleSpinBox()
         self.t_qtykg_input.setObjectName("endorsement-t-qtykg-input-spinbox")
@@ -479,21 +523,33 @@ class EndorsementCreateView(QWidget):
         self.t_qtykg_input.setMaximum(999999999.99)
         self.t_qtykg_input.setDecimals(2)
 
-        create_input_row("Quantity (kg):", self.t_qtykg_input, "t_qtykg", "t_qtykg_error")
+        create_input_row(
+            "Quantity (kg):", 
+            self.t_qtykg_input, 
+            "t_qtykg", 
+            "t_qtykg_error",
+            self
+        )
     
     def create_bag_input_row(
         self,
-        create_input_row: Callable[[str, Union[QWidget, QLineEdit], str, str], None]
+        create_input_row: Callable[[str, Union[QWidget, QLineEdit], str, str, QWidget], None]
     ) -> None:
         self.t_bag_num_input = QSpinBox()
         self.t_bag_num_input.setMinimum(0)
         self.t_bag_num_input.setMaximum(500)
 
-        create_input_row("Bag number:", self.t_bag_num_input, "t_bag_num", "t_bag_num_error")
+        create_input_row(
+            "Bag number:", 
+            self.t_bag_num_input, 
+            "t_bag_num", 
+            "t_bag_num_error",
+            parent=self
+        )
 
     def create_status_row(
         self, 
-        create_input_row: Callable[[str, Union[QWidget, QLineEdit], str, str], None]
+        create_input_row: Callable[[str, Union[QWidget, QLineEdit], str, str, QWidget], None]
     ) -> None:
         self.t_status_input = ModifiedComboBox()
         self.t_status_input.setObjectName("endorsement-create-status-input")
@@ -505,11 +561,17 @@ class EndorsementCreateView(QWidget):
 
         #  ---------------------- disable the status so that the user cannot change the combox box value ---------------------
         self.t_status_input.setDisabled(True)
-        create_input_row("Status:", self.t_status_input, "t_status", "t_status_error")
+        create_input_row(
+            "Status:", 
+            self.t_status_input, 
+            "t_status", 
+            "t_status_error",
+            parent=self
+        )
 
     def create_endorsed_by_input_row(
         self, 
-        create_input_row: Callable[[str, Union[QWidget, QLineEdit], str, str], None]
+        create_input_row: Callable[[str, Union[QWidget, QLineEdit], str, str, QWidget], None]
     ) -> None:
         self.t_endorsed_by_input = ModifiedComboBox()
         session = self.Session()
@@ -523,20 +585,32 @@ class EndorsementCreateView(QWidget):
 
                 self.t_endorsed_by_input.addItem(displayed_user_text)
 
-            create_input_row("Endorsed By:", self.t_endorsed_by_input, "t_endorsed_by", "t_endorsed_by_error")
+            create_input_row(
+                "Endorsed By:", 
+                self.t_endorsed_by_input, 
+                "t_endorsed_by", 
+                "t_endorsed_by_error",
+                parent=self
+            )
         finally:
             session.close()
     
     def create_remarks_input_row(
         self,
-        create_input_row: Callable[[str, Union[QWidget, QLineEdit], str, str], None]
+        create_input_row: Callable[[str, Union[QWidget, QLineEdit], str, str, QWidget], None]
     ) -> None:
         self.t_remarks_by_input = ModifiedComboBox()
         
         for remark in RemarksEnum:
             self.t_remarks_by_input.addItem(remark.value, remark)
 
-        create_input_row("Remarks:", self.t_remarks_by_input, "t_remarks", "t_remarks_error")
+        create_input_row(
+            "Remarks:", 
+            self.t_remarks_by_input, 
+            "t_remarks", 
+            "t_remarks_error",
+            parent=self
+        )
 
     def get_form_data(self) -> Dict[str, Union[str, int, bool, float, Any]]:
         """Collects data from UI widgets and returns it as a dictionary."""
@@ -623,22 +697,8 @@ class EndorsementCreateView(QWidget):
     
     def set_message_existing_record(self, endorsement_t2_existing_model: Type[DeclarativeMeta]) -> str:
         endorsement_parent_record = endorsement_t2_existing_model.endorsement_parent
-        
-        # details = {
-        #     "Reference Number": endorsement_t2_existing_model.t_refno,
-        #     "Production Code": endorsement_parent_record.t_prodcode,
-        #     "Date Endorsed": endorsement_parent_record.t_date_endorsed,
-        #     "Category": endorsement_parent_record.t_category,
-        #     "Qty": endorsement_t2_existing_model.t_qty,
-        #     "Lot number single": endorsement_t2_existing_model.t_lotnumbersingle,
-        #     "Lot number whole": endorsement_parent_record.t_lotnumberwhole,
-        #     "Endorsed By": endorsement_parent_record.t_endorsed_by,
-        #     "Status": endorsement_parent_record.t_status
-        # }
 
-        # detailed_str = json.dumps(details, indent=4, default=str)
-
-        #Handle enum display cleanly
+        # ------------------ Handle enum display cleanly ---------------------
         category = (
             endorsement_parent_record.t_category.value
             if hasattr(endorsement_parent_record.t_category, "value")
@@ -667,20 +727,15 @@ class EndorsementCreateView(QWidget):
 
     def save_endorsement(self):
         """Collects form data, validates it using Pydantic, and handles the result."""
-        self.clear_error_messages() # Clear all errors before re-validation
-        
+        # ----------------- Clear all errors before re-validation -------------------
+        self.clear_error_messages() 
         form_data = self.get_form_data()
         
         try:
             # start the session here
             session = self.Session()
 
-            # -------------------Validate the data using your Pydantic schema ---------------------
-            # ---------- SET THE SESSION HERE IN FOR THE SCHEMA ------------
-            # EndorsementFormSchema.set_db_session(session)
-
-            # ---------- SET THE FORM SCHEMA VALIDATION HERE --------------
-            # validated_data = EndorsementFormSchema(**form_data)
+            # ---------- Validate the data using your Pydantic schema --------------
             validated_data = self.endorsement_form_schema.validate_with_session(
                 form_data, 
                 session,
@@ -692,20 +747,11 @@ class EndorsementCreateView(QWidget):
             # before passing the validated form in the endorsement model check first if the data is already existing on the database
             
             # NOTE: IS_LOT_EXISTING_T2 HANDLES THE PART IF THE LOT NUMBER WAS PREVIOUSLY ENTERED AS A WHOLE LOT NUMBER
-            # is_lot_existing_in_t1 = session.query(EndorsementModel).filter(
-            #     EndorsementModel.t_lotnumberwhole == validated_data.t_lotnumberwhole
-            # ).first()
-
             is_lot_existing_t2 = session.query(self.endorsement_t2).filter(
                 self.endorsement_t2.t_lotnumbersingle == validated_data.t_lotnumberwhole
             ).first()
 
             if is_lot_existing_t2:
-                # TODO:
-                # ADD A LOGIC FOR CHECKING THE LOT NUMBER INSIDE THE LOT NUMBER 2 AS WELL
-                # CREATE A BAG NUMBER MODEL IN THE DATABASE (DONE)
-                # FIX THE CODE LOGIC HERE
-                
                 string_representation = self.set_message_existing_record(is_lot_existing_t2)
                 ans_res = StyledMessageBox.question(
                     self,
@@ -716,22 +762,16 @@ class EndorsementCreateView(QWidget):
                 )
 
                 if ans_res == StyledMessageBox.StandardButton.Yes:
-                    # TODO: if the prompt is yes. omit the lotnumber input of the user. And update the qty of the existing lot number
-                    
-                    # fetch the details variable here
+                    # ------------ Fetch the endorsement parent related to the result --------------
                     endorsement_parent = is_lot_existing_t2.endorsement_parent
 
-                     # UPDATE THE VALUE HERE OF THE QTY IN THE MAIN ENDORSEMENT TABLE 1
-                    # increment the value here
+                    # ------------ UPDATE THE VALUE HERE OF THE QTY IN THE MAIN ENDORSEMENT TABLE 1 ---------
+                    # ------------- INCREMENT THE VALUE HERE -------------
                     endorsement_parent.t_qtykg += validated_data.t_qtykg
 
                     # ---------------- SPECIFY ON THE is_lot_existing_t2 on the is_lot_number_entered column and set it to true --------------------
                     is_lot_existing_t2.is_lot_number_entered = True
-                    # is_lot_existing_in_t1.t_qtykg += validated_data.t_qtykg
 
-                    # CREATE A NEW OBJECT ON THE ENDORSEMENT TABLE 2 WITH THAT DATA.
-                    # NOTE: THAT THE ENDORSEMENT REFERENCE NUMBER SHOULD BE THE is_lot_existing_t1.ref_no
-                    
                     t2_new_instance = self.endorsement_t2(
                         t_refno=is_lot_existing_t2.t_refno,
                         t_lotnumbersingle=validated_data.t_lotnumberwhole,
@@ -745,7 +785,6 @@ class EndorsementCreateView(QWidget):
                 elif ans_res == StyledMessageBox.StandardButton.No:
                     session.rollback()
 
-                    # display a qmessagebox here for information
                     StyledMessageBox.information(
                         self,
                         "Transaction Cancelled",
@@ -761,7 +800,8 @@ class EndorsementCreateView(QWidget):
                 # ------------- if the form is valid store this in the database. ---------------------
                 # NOTE: exclude the t_bag_num because we will move the t_bag_num in endorsement t2 model
                 endorsement = self.endorsement_t1(**validated_data.model_dump(exclude={"t_bag_num"}))
-                    
+                
+                # NOTE: This can be a @staticmethod here in the class but it is way too long that's why I move it to helpers.py file
                 populate_endorsement_items(
                     endorsement_model=endorsement,
                     endorsement_model_t2=self.endorsement_t2,
@@ -772,8 +812,6 @@ class EndorsementCreateView(QWidget):
                 )
 
                 session.add(endorsement)
-
-            # --------------------------------------------------------------------------
 
             # ---------------- commit the changes if all transaction in the try block is valid ----------------
             session.commit()
@@ -866,7 +904,6 @@ class EndorsementCreateView(QWidget):
 
     def apply_styles(self):
         button_cursor_pointer(self.save_button)
-
         current_dir = os.path.dirname(__file__)
         qss_path = os.path.join(current_dir, "..", "styles", "endorsement.css")
         qss_path = os.path.abspath(qss_path)

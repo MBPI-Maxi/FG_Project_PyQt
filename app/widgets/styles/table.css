@@ -14,7 +14,8 @@ QTableWidget::item {
 }
 
 QHeaderView::section {
-    color: black;
+    /* color: black; */
+    color: #144574;
     background-color: #f0f0f0;
     padding: 6px;
     border: 1px solid #d0d0d0;
@@ -27,13 +28,6 @@ QHeaderView::section {
 QTableWidget::item:selected {
     background-color: #4a90e2;
     color: black;
-}
-
-QHeaderView::section {
-    background-color: #f0f0f0;
-    padding: 6px;
-    border: 1px solid #d0d0d0;
-    font-weight: bold;
 }
 
 /* vertical scroll bar */
@@ -109,6 +103,21 @@ QPushButton#endorsement-export-btn:hover {
     color: white;
 }
 
+QPushButton#tablewidget-finalize-btn {
+    /* background-color: #3a9eea;  Default black background */
+    background-color: #3a9eea; 
+    color: white;   
+    border: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+    width: 120px;                                   
+}
+
+QPushButton#tablewidget-finalize-btn:hover {
+    background-color: #317dc4;
+    color: white;
+}
+
 /* NEXT AND PREVIOUS QPUSHBUTTON DESIGN */
 QPushButton#tablewidget-prev-btn,
 QPushButton#tablewidget-next-btn {
@@ -171,4 +180,3 @@ QPushButton#tablewidget-refresh-btn:hover {
     background-color: #317dc4;
     color: white;
 }
-

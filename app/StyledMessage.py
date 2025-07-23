@@ -87,7 +87,6 @@ class StyledMessageBox(QMessageBox):
         
         return msg.exec()
 
-
 class TerminalCustomStylePrint():
     """Utility for styled terminal messages and exceptions"""
 

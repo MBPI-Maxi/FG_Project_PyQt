@@ -1,12 +1,14 @@
 from PyQt6.QtWidgets import QTableWidget
 from PyQt6.QtCore import Qt, QTimer
+from typing import override
 
 class ScrollableTableWidget(QTableWidget):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.scroll_step = 50  # Pixels to scroll per key press
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)  # Ensure table can receive key events
-        
+    
+    @override
     def keyPressEvent(self, event):
         # Handle horizontal scrolling
         if event.key() == Qt.Key.Key_Right:
@@ -18,7 +20,7 @@ class ScrollableTableWidget(QTableWidget):
         else:
             # Default behavior for other keys (including up/down navigation)
             super().keyPressEvent(event)
-    
+
     def _scroll_horizontal(self, forward=True):
         """Scroll horizontally while maintaining cell selection"""
         scrollbar = self.horizontalScrollBar()
@@ -44,3 +46,4 @@ class ScrollableTableWidget(QTableWidget):
                 current_item, 
                 QTableWidget.ScrollHint.EnsureVisible
             )
+            

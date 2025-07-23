@@ -111,6 +111,7 @@ class EndorsementCombinedView(Base):
     t_prodcode = Column(String)
     t_status = Column(String)
     t_endorsed_by = Column(String)
+    t_bag_num = Column(String)
     t_category = Column(String)
     t_has_excess = Column(Boolean)
     t_source_table = Column(String)

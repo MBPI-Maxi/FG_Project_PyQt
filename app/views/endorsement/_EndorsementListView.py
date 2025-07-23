@@ -10,10 +10,10 @@ from PyQt6.QtWidgets import (
 
 from PyQt6.QtCore import QDate
 
-from app.helpers import load_styles
+from app.helpers import load_styles, button_cursor_pointer
 from app.widgets import ModifiedComboBox, ModifiedDateEdit, TableWidget
 from constants.Enums import CategoryEnum, StatusEnum
-from typing import Callable, Type
+from typing import Callable, Type, Union
 from sqlalchemy.orm import Session, DeclarativeMeta
 
 import os
@@ -32,6 +32,20 @@ class EndorsementListView(QWidget):
         self.endorsement_combined_view = endorsement_combined_view
         self.setup_ui()
         self.apply_styles()
+
+    @staticmethod
+    def create_filter_group(
+        label: Type[QLabel], 
+        widget: Union[QLineEdit, ModifiedComboBox]
+    ):
+        group = QWidget()
+        layout = QVBoxLayout(group)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(2)
+        layout.addWidget(label)
+        layout.addWidget(widget)
+            
+        return group
         
     def setup_ui(self):
         layout = QVBoxLayout()
@@ -63,6 +77,8 @@ class EndorsementListView(QWidget):
         current_dir = os.path.dirname(__file__)
         qss_path = os.path.join(current_dir, "..", "styles", "endorsement_list.css")
         qss_path = os.path.abspath(qss_path)
+        button_cursor_pointer(self.list_reset_btn)
+        button_cursor_pointer(self.search_button)
 
         load_styles(qss_path, self)
     
@@ -92,15 +108,8 @@ class EndorsementListView(QWidget):
         self.status_filter.setCurrentText("ALL")
 
     def create_filter_layout(self):
-        def create_filter_group(label, widget):
-            group = QWidget()
-            layout = QVBoxLayout(group)
-            layout.setContentsMargins(0, 0, 0, 0)
-            layout.setSpacing(2)
-            layout.addWidget(label)
-            layout.addWidget(widget)
-            
-            return group
+        create_filter_group = self.create_filter_group
+        
         # ------------- FILTERS ----------------
         self.category_filter = ModifiedComboBox()
         self.status_filter = ModifiedComboBox()
