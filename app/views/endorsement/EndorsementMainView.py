@@ -92,7 +92,6 @@ class EndorsementMainView(QWidget):
         self.setLayout(self.layout)
     
     def apply_styles(self):
-        # qss_path = os.path.join(os.path.dirname(__file__), "styles", "crud_btn.css")
         current_dir = os.path.dirname(__file__)
         qss_path = os.path.join(current_dir, "..", "styles", "crud_btn.css")
         qss_path = os.path.abspath(qss_path)

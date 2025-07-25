@@ -32,9 +32,9 @@ QTableWidget::item:selected {
 
 /* vertical scroll bar */
 QScrollBar:vertical {
-    border: none;
-    background: grey;
-    background: transparent;
+    /* border: none; */
+    /* background: grey; */
+    /* background: transparent; */
     width: 10px;
     margin: 0px 0px 0px 0px;
 }

@@ -8,3 +8,6 @@ test.py
 **/*.pyc
 models/__pycache__/
 constants/__pycache__/
+
+dist
+build

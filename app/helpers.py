@@ -3,7 +3,7 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QPushButton, QWidget
 from sqlalchemy import text
 from sqlalchemy.orm import Session, DeclarativeMeta
-from typing import Type, Dict, Any, Literal
+from typing import Type, Dict, Any
 from constants.Enums import CategoryEnum
 
 from app.StyledMessage import TerminalCustomStylePrint
@@ -222,3 +222,18 @@ def insert_existing_lot_t2(
         TerminalCustomStylePrint.raise_red_flag("Argument endorsement_t2_model is incorrect")
     else:
         print(True)
+
+
+# def resource_path(relative_path):
+#     """ Get absolute path to resource, works for dev and for PyInstaller """
+#     try:
+#         # PyInstaller creates a temp folder and stores path in _MEIPASS
+#         base_path = sys._MEIPASS
+#     except Exception:
+#         # Not running in a bundle, so the base path is the project root
+#         # This assumes your main script is in the project root.
+#         # Adjust if necessary, for example, if your helpers.py is one level down:
+#         # base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+#         base_path = os.path.abspath(".")
+
+#     return os.path.join(base_path, relative_path)
