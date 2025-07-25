@@ -1,0 +1,3 @@
+pyinstaller --add-data "app;app" --add-data "config;config" --add-data "models;models" --add-data "alembic;alembic" --add-data "alembic.ini;." --add-data ".env;." main.py
+
+# NOTE: IF .ENV IS NOT BEING RECOGNIZE ON _INTERNAL FOLDER MOVE THE .ENV FILE IN DIRECTORY BESIDES THE MAIN.EXE FILE

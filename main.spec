@@ -5,14 +5,7 @@ a = Analysis(
     ['main.py'],
     pathex=[],
     binaries=[],
-    datas=[
-        # !important include here all the necessary folders and styles for bundling 
-        ('app', 'app'),
-        ('config', 'config'),
-        ('models', 'models'),
-        ('alembic', 'alembic'),
-        ('alembic.ini', '.'),
-    ],
+    datas=[('app', 'app'), ('config', 'config'), ('models', 'models'), ('alembic', 'alembic'), ('alembic.ini', '.'), ('.env', '.')],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
