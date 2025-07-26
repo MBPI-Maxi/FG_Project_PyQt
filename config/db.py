@@ -40,7 +40,7 @@ else:
 environment_value = os.getenv("ENVIRONMENT")
 print(f"Value of 'ENVIRONMENT' variable is: '{environment_value}'")
 
-if os.getenv("ENVIRONMENT") == "MBPI":
+if environment_value == "MBPI":
     url = URL.create(
         drivername=os.getenv("DB_DRIVER"),
         username=os.getenv("DB_USER"),
@@ -49,7 +49,7 @@ if os.getenv("ENVIRONMENT") == "MBPI":
         port=os.getenv("DB_PORT"),
         password=os.getenv("DB_PASSWORD")
     )
-elif os.getenv("ENVIRONMENT") == "HOME":
+elif environment_value == "HOME":
     url = URL.create(
         drivername=os.getenv("DB_DRIVER_HOME"),
         username=os.getenv("DB_USER_HOME"),
