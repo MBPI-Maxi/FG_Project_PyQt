@@ -9,7 +9,6 @@ from PyQt6.QtWidgets import (
 )
 
 from PyQt6.QtCore import QDate
-
 from app.helpers import load_styles, button_cursor_pointer
 from app.widgets import ModifiedComboBox, ModifiedDateEdit, TableWidget
 from constants.Enums import CategoryEnum, StatusEnum
@@ -23,13 +22,13 @@ class EndorsementListView(QWidget):
     def __init__(
         self, 
         session_factory: Callable[..., Session],
-        endorsement_combined_view: Type[DeclarativeMeta],
+        endorsement: Type[DeclarativeMeta],
         parent=None
     ):
         super().__init__(parent)
         self.Session = session_factory
         self.table_widget = TableWidget
-        self.endorsement_combined_view = endorsement_combined_view
+        self.endorsement = endorsement
         self.setup_ui()
         self.apply_styles()
 
@@ -85,10 +84,11 @@ class EndorsementListView(QWidget):
     def show_table(self):
         table = self.table_widget(
             session_factory=self.Session,
-            db_model=self.endorsement_combined_view,
+            db_model=self.endorsement,
             view_type="endorsement-list"
         )
         table.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        table.load_data()
         
         return table
 
@@ -187,25 +187,25 @@ class EndorsementListView(QWidget):
             status_code_filter = self.status_filter.currentText().strip().upper()
             category_filter = self.category_filter.currentText().strip().upper()
 
-            query = session.query(self.endorsement_combined_view)
+            query = session.query(self.endorsement)
             
             # ---------------- FILTER LOGIC FOR REFERENCE NUMBER -----------------
             if ref_no_filter:
-                query = query.filter(self.endorsement_combined_view.t_refno.ilike(f"%{ref_no_filter}%"))
+                query = query.filter(self.endorsement.t_refno.ilike(f"%{ref_no_filter}%"))
             
             # --------------- FILTER LOGIC FOR PRODUCTION CODE -------------------
             if prod_code_filter:
-                query = query.filter(self.endorsement_combined_view.t_prodcode.ilike(f"%{prod_code_filter}%"))
+                query = query.filter(self.endorsement.t_prodcode.ilike(f"%{prod_code_filter}%"))
 
             # -------------- FILTER LOGIC FOR THE STATUS ------------------------
             if status_code_filter != "ALL":
                 query = query.filter(
-                    self.endorsement_combined_view.t_status == status_code_filter
+                    self.endorsement.t_status == status_code_filter
                 )
             
             if status_code_filter == "ALL":
                 query = query.filter(
-                    self.endorsement_combined_view.t_status.in_([StatusEnum.PASSED.value, StatusEnum.FAILED.value])
+                    self.endorsement.t_status.in_([StatusEnum.PASSED.value, StatusEnum.FAILED.value])
                 )
 
             # -------------------  FILTER LOGIC FOR THE CATEGORY ----------------------
@@ -213,22 +213,22 @@ class EndorsementListView(QWidget):
                 selected_category = self.category_filter.currentData()
 
                 if selected_category:  # Ensure we have valid category data
-                    query = query.filter(self.endorsement_combined_view.t_category == selected_category.value)
+                    query = query.filter(self.endorsement.t_category == selected_category.value)
 
             if category_filter == "ALL":
                 query = query.filter(
-                    self.endorsement_combined_view.t_category.in_([CategoryEnum.MB.value, CategoryEnum.DC.value])
+                    self.endorsement.t_category.in_([CategoryEnum.MB.value, CategoryEnum.DC.value])
                 )
 
             # --------------------  FILTER LOGIC FOR THE DATES -----------------------
             if self.date_from.date() <= self.date_to.date():
                 query = query.filter(
-                    self.endorsement_combined_view.t_date_endorsed >= self.date_from.date().toPyDate(),
-                    self.endorsement_combined_view.t_date_endorsed <= self.date_to.date().toPyDate()
+                    self.endorsement.t_date_endorsed >= self.date_from.date().toPyDate(),
+                    self.endorsement.t_date_endorsed <= self.date_to.date().toPyDate()
                 )
             
             # UPDATES THE TABLE BY CALLING THE .update_table_with_results in the TableWidget class
-            results = query.order_by(self.endorsement_combined_view.t_date_endorsed.desc()).all()
+            results = query.order_by(self.endorsement.t_date_endorsed.desc()).all()
             self.table.update_table_with_results(results, apply_pagination=True)
         finally:
             session.close()

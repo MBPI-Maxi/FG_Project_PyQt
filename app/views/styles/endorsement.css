@@ -46,6 +46,10 @@ QComboBox:focus
     selection-color: white;
 }
 
+#endorsement-wtlot-input {
+    width: 1000px;
+}
+
 QLabel {
     font-weight: 600;
     font-size: 14px;

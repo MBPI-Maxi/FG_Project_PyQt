@@ -18,7 +18,7 @@ from app.views import (
 from app.views.endorsement import EndorsementMainView
 
 
-from app.helpers import load_styles, button_cursor_pointer
+from app.helpers import load_styles, button_cursor_pointer, get_default_mac, get_ip_address
 from PyQt6.QtGui import QFont
 from PyQt6.QtCore import QSize, QTimer
 from typing import Type, Callable
@@ -124,8 +124,11 @@ class FGDashboard(QMainWindow):
         self.time_label = QLabel()
         self.time_label.setObjectName("FGDashboard-status-time-label")
 
-        self.powered_by_software = QLabel("Powered by PYQT6")
+        self.powered_by_software = QLabel("Powered by PyQt6")
         self.program_credits = QLabel("Developed by: IT Department Team")
+
+        self.default_ip_address = QLabel(get_ip_address())
+        self.default_mac_address = QLabel(get_default_mac())
         
         # icon for db_status_icon_label
         self.db_status_icon_label.setPixmap(
@@ -142,6 +145,10 @@ class FGDashboard(QMainWindow):
         self.status_bar.addPermanentWidget(self.db_status_text_label)
         self.status_bar.addPermanentWidget(create_separator())
         self.status_bar.addPermanentWidget(self.time_label)
+        self.status_bar.addPermanentWidget(create_separator())
+        self.status_bar.addPermanentWidget(self.default_ip_address)
+        self.status_bar.addPermanentWidget(create_separator())
+        self.status_bar.addPermanentWidget(self.default_mac_address)
 
         self.status_timer = QTimer(self)
         self.status_timer.timeout.connect(

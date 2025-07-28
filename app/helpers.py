@@ -5,11 +5,28 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session, DeclarativeMeta
 from typing import Type, Dict, Any
 from constants.Enums import CategoryEnum
-
 from app.StyledMessage import TerminalCustomStylePrint
+
+import uuid
+import socket
 
 class ButtonCursorError(BaseException):
     pass
+
+# FOR GETTING MAC ADDRESS TO BE DISPLAYED IN THE STATUS BAR
+def get_default_mac():
+    mac = uuid.getnode()
+    mac_formatted = ':'.join(f"{((mac >> elements) & 0xff):02x}" for elements in range(0, 8*6, 8)[::-1])
+    
+    return mac_formatted
+
+# FOR GETTING THE DEFAULT LOCAL IP ADDRESS (USE NETIFACES LIB FOR CONSISTENCY)
+def get_ip_address():
+    hostname = socket.gethostname()
+    all_ips = socket.gethostbyname_ex(hostname)[2]
+    
+    return all_ips[-1]
+
 
 # FOR CREATING CURSOR POINTER ON BUTTON
 def button_cursor_pointer(button_widget: Type[QPushButton]):

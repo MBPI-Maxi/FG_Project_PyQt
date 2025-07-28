@@ -31,6 +31,10 @@ class ModifiedComboBox(QComboBox):
         """)
     
     @override
+    def wheelEvent(self, e):
+        e.ignore()
+    
+    @override
     def showPopup(self):
         self.view().setCursor(Qt.CursorShape.PointingHandCursor)
         super().showPopup()

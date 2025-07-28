@@ -47,6 +47,10 @@ class StatusEnum(Enum):
     PASSED = "PASSED"
     FAILED = "FAILED"
 
+class Prodcode(Enum):
+    # tawag sa db
+    RESULT 
+
 class RemarksEnum(Enum):
     NO_REMARKS = "No Remarks"
     OVERSIZED = "OVERSIZED"
@@ -62,7 +66,9 @@ class TableHeader():
             "Ref No", "Date Endorse", "Category", 
             "Product Code", "Lot Number", 
             "Qty (kg)", "Status", "Bag Number",
-            "Endorsed By", "Source Table", "Has Excess",
+            "Endorsed By", 
+            # "Source Table", 
+            # "Has Excess",
         ]
     }
 

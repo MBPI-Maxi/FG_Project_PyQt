@@ -40,6 +40,9 @@ class StyledMessageBox(QMessageBox):
         msg.setText(message)
         msg.setStandardButtons(QMessageBox.StandardButton.Ok)
         
+        ok_btn = msg.button(QMessageBox.StandardButton.Ok)
+        ok_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+
         msg.exec()
         
         return msg
@@ -84,6 +87,12 @@ class StyledMessageBox(QMessageBox):
             QMessageBox.StandardButton.Yes | 
             QMessageBox.StandardButton.No
         )
+        
+        yes_btn = msg.button(QMessageBox.StandardButton.Yes)
+        no_btn = msg.button(QMessageBox.StandardButton.No)
+
+        yes_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        no_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         
         return msg.exec()
 

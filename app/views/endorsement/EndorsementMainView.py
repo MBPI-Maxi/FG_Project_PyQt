@@ -70,7 +70,7 @@ class EndorsementMainView(QWidget):
         )
         self.list_view = EndorsementListView(
             session_factory=self.Session,
-            endorsement_combined_view=EndorsementCombinedView
+            endorsement=EndorsementModel
         )
         self.how_to_use_view = HowToUseView()
         
@@ -81,7 +81,7 @@ class EndorsementMainView(QWidget):
 
         # --------------------- Connect signals -----------------------
         self.create_btn.clicked.connect(lambda: self.stacked_widget.setCurrentWidget(self.create_view))
-        self.list_btn.clicked.connect(lambda: self.stacked_widget.setCurrentWidget(self.list_view))
+        self.list_btn.clicked.connect(self.update_table_on_click)
         self.how_to_use_btn.clicked.connect(lambda: self.stacked_widget.setCurrentWidget(self.how_to_use_view))
         
         # ----------------------- When a record is selected in list view for editing -------------------------------
@@ -101,6 +101,10 @@ class EndorsementMainView(QWidget):
         button_cursor_pointer(self.how_to_use_btn)
         
         load_styles(qss_path, self)
+
+    def update_table_on_click(self):
+        self.stacked_widget.setCurrentWidget(self.list_view)
+        self.list_view.table.load_data()
 
     def show_update_view(self, ref_no):
         """Load data for editing and switch to update view"""

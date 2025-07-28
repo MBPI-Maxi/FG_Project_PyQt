@@ -285,6 +285,20 @@ class TableWidget(QWidget):
         )
         return
 
+    def initiate_table_records(self, queryset):
+        for row_idx, record in enumerate(queryset):
+            self._set_table_item(row_idx, 0, record.t_refno)
+            self._set_table_item(row_idx, 1, record.t_date_endorsed.strftime("%Y-%m-%d"))  # Fixed column index
+            self._set_table_item(row_idx, 2, record.t_category.value)
+            self._set_table_item(row_idx, 3, record.t_prodcode)
+            self._set_table_item(row_idx, 4, record.t_lotnumberwhole)
+            self._set_table_item(row_idx, 5, f"{float(record.t_qtykg):.2f}")
+            self._set_table_item(row_idx, 6, record.t_status.value)
+            self._set_table_item(row_idx, 7, record.endorsement_t2_items[0].t_bag_num if record.endorsement_t2_items and record.endorsement_t2_items[0].t_bag_num else "No Bag no.")
+            self._set_table_item(row_idx, 8, record.t_endorsed_by)
+
+            self._set_color_for_failed_items(row_idx, record)
+
     def load_data(self):
         """Load data from the endorsement_combined view with pagination."""
         try:
@@ -302,10 +316,11 @@ class TableWidget(QWidget):
             limit = self.items_per_page
             # print(f"Loading page {self.current_page} (offset {offset}, limit {limit})")
 
-            if model.__tablename__ == "endorsement_combined":
+            # if model.__tablename__ == "endorsement_combined":
+            if model.__tablename__ == "tbl_endorsement_t1":
                 # Get fresh results with explicit ordering
                 results = session.query(model)\
-                    .order_by(model.t_lot_number.asc())\
+                    .order_by(model.created_at.asc())\
                     .offset(offset).limit(limit).all()
 
                 # Debug: Print all fetched records
@@ -314,24 +329,8 @@ class TableWidget(QWidget):
                 #     print(f"{i}: {r.t_refno} | {r.t_lot_number} | {r.t_total_quantity}")
 
                 self.table.setRowCount(len(results))
-                
-                # Correct column mapping (0-10)
-                for row_idx, record in enumerate(results):
-                    self._set_table_item(row_idx, 0, record.t_refno)
-                    self._set_table_item(row_idx, 1, record.t_date_endorsed.strftime("%Y-%m-%d"))  # Fixed column index
-                    self._set_table_item(row_idx, 2, record.t_category)
-                    self._set_table_item(row_idx, 3, record.t_prodcode)
-                    self._set_table_item(row_idx, 4, record.t_lot_number)
-                    self._set_table_item(row_idx, 5, f"{float(record.t_total_quantity):.2f}")
-                    self._set_table_item(row_idx, 6, record.t_status)
-                    self._set_table_item(row_idx, 7, record.t_bag_num if record.t_bag_num else "No Bag no.")
-                    self._set_table_item(row_idx, 8, record.t_endorsed_by)
-                    self._set_table_item(row_idx, 9, record.t_source_table)
-                    self._set_table_item(row_idx, 10, record.t_has_excess)
-
-                    # After populating the row, apply color if the status is FAILED
-                    self._set_color_for_failed_items(row_idx, record)
-
+                self.initiate_table_records(queryset=results)
+        
                 self.update_pagination_controls()
         except Exception as e:
             print(f"Error loading data: {str(e)}")
@@ -360,23 +359,8 @@ class TableWidget(QWidget):
         
         # ---------- Update the table ----------
         self.table.setRowCount(len(paginated_results))
-        
-        for row_idx, record in enumerate(paginated_results):
-            self._set_table_item(row_idx, 0, record.t_refno)
-            self._set_table_item(row_idx, 1, record.t_date_endorsed.strftime("%Y-%m-%d"))
-            self._set_table_item(row_idx, 2, record.t_category)
-            self._set_table_item(row_idx, 3, record.t_prodcode)
-            self._set_table_item(row_idx, 4, record.t_lot_number)
-            self._set_table_item(row_idx, 5, f"{float(record.t_total_quantity):.2f}")
-            self._set_table_item(row_idx, 6, record.t_status)
-            self._set_table_item(row_idx, 7, record.t_bag_num if record.t_bag_num else "No Bag no.")
-            self._set_table_item(row_idx, 8, record.t_endorsed_by)
-            self._set_table_item(row_idx, 9, record.t_source_table)
-            self._set_table_item(row_idx, 10, record.t_has_excess)
+        self.initiate_table_records(queryset=paginated_results)
 
-            #  -------------- After populating the row, apply color if the status is FAILED --------------
-            self._set_color_for_failed_items(row_idx, record)
-                    
         # -------------- Update pagination controls --------------------
         self.update_pagination_controls()
         self._add_matches_found(len(results))
