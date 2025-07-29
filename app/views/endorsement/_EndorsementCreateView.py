@@ -9,13 +9,14 @@ from PyQt6.QtWidgets import (
     QPushButton,
     QLineEdit,
     QDateEdit,
-    QCheckBox,
+    QCheckBox
 )
 from app.helpers import (
     fetch_current_t_refno_in_endorsement,
     populate_endorsement_items,
     load_styles,
-    button_cursor_pointer
+    button_cursor_pointer,
+    create_session
 )
 
 from app.widgets import (
@@ -28,19 +29,26 @@ from app.widgets import (
     ModifiedCheckbox
 )
 
-from PyQt6.QtCore import Qt, QDate
-from app.StyledMessage import StyledMessageBox, TerminalCustomStylePrint
-from typing import Callable, Type, Union, Dict, Any
+from PyQt6.QtCore import Qt, QDate, QTimer
+from app.StyledMessage import StyledMessageBox
+from typing import Callable, Type, Union, Dict, Any, List
 from constants.Enums import CategoryEnum, StatusEnum, RemarksEnum
 from constants.mapped_user import mapped_user_to_display
 
 from sqlalchemy.orm import Session, DeclarativeMeta
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy import MetaData, Table, select
 from pydantic import BaseModel, ValidationError
+from datetime import datetime
 
+import json
 import math
 import traceback
 import os
+
+# IMPORT THE DATABASE HERE FOR THE 'dbinv' in postgres passed as an instance agurment
+from config.db import prodcode_engine
+
 
 class EndorsementCreateView(QWidget):
     def __init__(
@@ -57,7 +65,7 @@ class EndorsementCreateView(QWidget):
         super().__init__(parent)
         self.setWindowTitle("Endorsement Form")
         self.setObjectName("EndorsementForm")
-        
+
         self.Session = session_factory
         self.endorsement_t1 = endorsement_t1
         self.endorsement_t2 = endorsement_t2
@@ -65,11 +73,17 @@ class EndorsementCreateView(QWidget):
         self.endorsement_lot_excess = endorsement_lot_excess
         self.endorsement_form_schema = endorsement_form_schema
         self.user_model = user_model
-       
+
+        # -------------------- THIS IS FOR THE TIMER IN PRODCODE EXECUTION ------------------
+        self.db_fetch_timer = QTimer()
+        self.db_fetch_timer.setSingleShot(True)
+        self.db_fetch_timer.timeout.connect(self._fetch_codes_from_database)
+        self.pending_db_text = ""
+
         self.table_widget = self.show_table()
         self.init_ui()
         self.apply_styles()
-
+    
     @staticmethod
     def create_input_row(
             label_text: str,
@@ -136,6 +150,42 @@ class EndorsementCreateView(QWidget):
         
         parent.t_lotnumberwhole_input.setFocus()
         parent.t_lotnumberwhole_input.setCursorPosition(0)
+    
+    @staticmethod
+    def load_codes_from_cache() -> list:
+        try:
+            current_dir = os.path.dirname(__file__)
+            # path = os.path.join(current_dir, "views", "cache", "prodcode.json")
+            path = os.path.join(current_dir, "..", "cache", "prodcode.json")
+            
+            if os.path.exists(path):
+
+                with open(path, "r", encoding="utf-8") as f:
+                    return json.load(f).get("data", [])
+                    
+        except Exception:
+            traceback.print_exc()
+
+        return []
+    
+    @staticmethod
+    def save_codes_to_cache(codes: list):
+        try:
+            payload = {
+                "date": datetime.now().strftime("%Y-%m-%d"),
+                "data": codes,
+                "total_length": len(codes)
+            }
+            # cache_path = os.path.join(BASE_DIR, "views", "cache", "prodcode.json")
+            cache_path = os.path.join(os.path.dirname(__file__), "..", "views", "cache", "prodcode.json")
+            os.makedirs(os.path.dirname(cache_path), exist_ok=True)
+
+            with open(cache_path, "w", encoding="utf-8") as f:
+                json.dump(payload, f, ensure_ascii=False, indent=4)
+            print(f"Cache updated: {cache_path}")
+
+        except Exception:
+            traceback.print_exc()
 
     def init_ui(self):
         # -------------------  Main container with vertical layout ----------------------------
@@ -484,11 +534,7 @@ class EndorsementCreateView(QWidget):
         create_input_row: Callable[[str, Union[QWidget, QLineEdit], str, str, QWidget], None]
     ) -> None:
         self.t_prodcode_input = ModifiedComboBox()
-        self.t_prodcode_input.addItems([
-            "PlaceholderTest1",
-            "PlaceholderTest2",
-            "PlaceholderTest3"
-        ])
+        self.t_prodcode_input.lineEdit().setPlaceholderText("Enter product code here...")
 
         create_input_row(
             "Product Code:", 
@@ -497,7 +543,10 @@ class EndorsementCreateView(QWidget):
             "t_prodcode_error",
             parent=self
         )
-    
+
+        # SEARCH BEHAVIOUR
+        self.t_prodcode_input.lineEdit().textEdited.connect(self.on_prodcode_text_edited)
+            
     def create_weight_per_lot_row(
         self, 
         create_input_row: Callable[[str, Union[QWidget, QLineEdit], str, str, QWidget], None]
@@ -631,6 +680,94 @@ class EndorsementCreateView(QWidget):
             parent=self
         )
 
+    def _update_combobox(self, text: str, codes: list):
+        current_text = self.t_prodcode_input.currentText()
+        cursor_pos = self.t_prodcode_input.lineEdit().cursorPosition()
+
+        self.t_prodcode_input.blockSignals(True)
+        self.t_prodcode_input.model().removeRows(0, self.t_prodcode_input.count())
+        self.t_prodcode_input.addItems(codes)
+        self.t_prodcode_input.setCurrentText(current_text)
+        self.t_prodcode_input.lineEdit().setCursorPosition(cursor_pos)
+        self.t_prodcode_input.blockSignals(False)
+
+        self.t_prodcode_input._completer_model.setStringList(codes)
+
+    def on_prodcode_text_edited(self, text: str) -> None:
+        if not text or len(text) < 2:
+            self.t_prodcode_input.setCompleter(None)  # Disable completer temporarily
+            
+            return 
+
+        # --------- TRY TO FETCH PRODCODE DATA FROM THE JSON CACHE FIRST BEFORE ACCESSING THE DATABASE ----------
+        cached_codes = self.load_codes_from_cache()
+        filtered_codes = [code for code in cached_codes if text.lower() in code.lower()]
+
+        if filtered_codes:
+            self._update_combobox(text, filtered_codes)
+            QTimer.singleShot(100, lambda: self.t_prodcode_input.showPopup())
+            self.db_fetch_timer.stop()
+            
+            return
+
+        # Delayed DB fetch only if cache has no match
+        self.pending_db_text = text
+        self.db_fetch_timer.start(10000)
+    
+    def _fetch_codes_from_database(self):
+        """
+        THIS WILL HAPPEN IF THE USER TYPES A ENTRY ON THE PRODCODE AND 
+        DOESN'T RECOGNIZE IT FROM THE JSON FILE. IT WILL FETCH THE DATA 
+        DIRECTLY ON THE DATABASE
+        """
+        text = self.pending_db_text
+        
+        if not text:
+            return
+
+        try:
+            session_factory_prodcode = create_session(prodcode_engine)
+            session = session_factory_prodcode()
+
+            metadata = MetaData()
+            product_code_table = Table("tbl_prod01", metadata, autoload_with=prodcode_engine)
+            prodcode_col = product_code_table.columns["T_PRODCODE"]
+
+            stmt = (
+                select(prodcode_col.distinct())
+                .where(prodcode_col.ilike(f"%{text}%"))
+                .limit(3000)
+            )
+
+            results = session.execute(stmt).fetchall()
+            db_codes = [row[0] for row in results]
+
+            if not db_codes:
+                return  # Nothing found even in DB, don't update dropdown or cache
+
+            # Load current cached codes
+            cached_codes = set(self.load_codes_from_cache())
+
+            # Only codes that were NOT in the cache
+            new_codes = [code for code in db_codes if code not in cached_codes]
+
+            if new_codes:
+                # Merge and save back to JSON
+                updated_codes = sorted(cached_codes.union(new_codes))
+                self.save_codes_to_cache(updated_codes)
+
+            # Proceed to update dropdown regardless
+            self._update_combobox(text, db_codes)
+            QTimer.singleShot(100, lambda: self.t_prodcode_input.showPopup())
+
+        except Exception as e:
+            print(f"Error fetching product codes from DB: {e}")
+            traceback.print_exc()
+        finally:
+            session.close()
+
+    
+
     def get_form_data(self) -> Dict[str, Union[str, int, bool, float, Any]]:
         """Collects data from UI widgets and returns it as a dictionary."""
 
@@ -652,9 +789,11 @@ class EndorsementCreateView(QWidget):
     def clear_error_messages(self):
         """Clears all displayed error messages."""
         for key in list(self.form_fields.keys()):
+            
             if key.endswith("_error"):
                 self.form_fields[key].setText("")
                 field_name = key.replace("_error", "")
+                
                 if field_name in self.form_fields:
                     self.form_fields[field_name].setStyleSheet("")
                 

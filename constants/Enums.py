@@ -46,11 +46,7 @@ class MBDefaultValue(Enum):
 class StatusEnum(Enum):
     PASSED = "PASSED"
     FAILED = "FAILED"
-
-class Prodcode(Enum):
-    # tawag sa db
-    RESULT 
-
+ 
 class RemarksEnum(Enum):
     NO_REMARKS = "No Remarks"
     OVERSIZED = "OVERSIZED"

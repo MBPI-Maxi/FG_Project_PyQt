@@ -18,7 +18,9 @@ QLabel {
 }
 
 QPushButton#endorsementList-search-btn,
-QPushButton#endorsementList-reset-btn
+QPushButton#endorsementList-reset-btn,
+QPushButton#endorsementList-excess-view-btn,
+QPushButton#endorsementList-breakdown-view-btn
 {
     background-color: #3a9eea;
     color: white;            
@@ -29,7 +31,9 @@ QPushButton#endorsementList-reset-btn
 }
 
 QPushButton#endorsementList-search-btn:hover, 
-QPushButton#endorsementList-reset-btn:hover
+QPushButton#endorsementList-reset-btn:hover,
+QPushButton#endorsementList-excess-view-btn:hover,
+QPushButton#endorsementList-breakdown-view-btn:hover
 {
     background-color: #317dc4;  
     color: white; 

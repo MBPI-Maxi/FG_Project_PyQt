@@ -2,7 +2,8 @@
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QPushButton, QWidget
 from sqlalchemy import text
-from sqlalchemy.orm import Session, DeclarativeMeta
+from sqlalchemy.orm import Session, DeclarativeMeta, sessionmaker
+from sqlalchemy.engine import Engine
 from typing import Type, Dict, Any
 from constants.Enums import CategoryEnum
 from app.StyledMessage import TerminalCustomStylePrint
@@ -27,6 +28,10 @@ def get_ip_address():
     
     return all_ips[-1]
 
+def create_session(engine: Engine) -> sessionmaker[Session]:
+    session_factory = sessionmaker(engine)
+    
+    return session_factory
 
 # FOR CREATING CURSOR POINTER ON BUTTON
 def button_cursor_pointer(button_widget: Type[QPushButton]):

@@ -9,6 +9,7 @@ from PyQt6.QtWidgets import (
 )
 
 from PyQt6.QtCore import QDate
+
 from app.helpers import load_styles, button_cursor_pointer
 from app.widgets import ModifiedComboBox, ModifiedDateEdit, TableWidget
 from constants.Enums import CategoryEnum, StatusEnum
@@ -23,12 +24,16 @@ class EndorsementListView(QWidget):
         self, 
         session_factory: Callable[..., Session],
         endorsement: Type[DeclarativeMeta],
+        endorsement_t2: Type[DeclarativeMeta],
+        endorsemnt_excess: Type[DeclarativeMeta],
         parent=None
     ):
         super().__init__(parent)
         self.Session = session_factory
         self.table_widget = TableWidget
         self.endorsement = endorsement
+        self.endorsement_t2 = endorsement_t2
+        self.endorsement_excess = endorsemnt_excess
         self.setup_ui()
         self.apply_styles()
 
@@ -45,6 +50,10 @@ class EndorsementListView(QWidget):
         layout.addWidget(widget)
             
         return group
+
+    @staticmethod
+    def set_table_policy(table: Type[TableWidget]) -> None:
+        table.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         
     def setup_ui(self):
         layout = QVBoxLayout()
@@ -52,11 +61,13 @@ class EndorsementListView(QWidget):
         layout.setSpacing(6)
 
         top_filter_layout, bottom_filter_layout = self.create_filter_layout()
+        view_btn_layout = self.create_view_other_table_layout()
         self.table = self.show_table()
 
         # ------------- Add all to main layout ----------------
         layout.addLayout(top_filter_layout)
         layout.addLayout(bottom_filter_layout)
+        layout.addLayout(view_btn_layout)
         layout.addWidget(self.table)
         layout.setStretch(2, 1)
 
@@ -78,6 +89,8 @@ class EndorsementListView(QWidget):
         qss_path = os.path.abspath(qss_path)
         button_cursor_pointer(self.list_reset_btn)
         button_cursor_pointer(self.search_button)
+        button_cursor_pointer(self.excess_sheet_btn)
+        button_cursor_pointer(self.breakdown_lot_sheet)
 
         load_styles(qss_path, self)
     
@@ -87,9 +100,23 @@ class EndorsementListView(QWidget):
             db_model=self.endorsement,
             view_type="endorsement-list"
         )
-        table.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+       
+        self.set_table_policy(table=table)
         table.load_data()
         
+        return table
+
+    def excess_view_table(self):
+        # -------- FOR THIS SAME HEADERS SHOULD BE APPLY --------
+        table = self.table_widget(
+            session_factory=self.Session,
+            db_model=self.endorsement_excess,
+            view_type="endorsement-list"
+        )
+
+        self.set_table_policy(table=table)
+        table.load_data()
+
         return table
 
     def create_category_menu(self):
@@ -140,12 +167,12 @@ class EndorsementListView(QWidget):
         self.search_button = QPushButton("Search")
         self.search_button.setObjectName("endorsementList-search-btn")
 
-        # --- Top row filter layout ---
+        # --- Top row filter layout (1) ---
         top_filter_layout = QHBoxLayout()
         top_filter_layout.setContentsMargins(0, 0, 0, 0)
         top_filter_layout.setSpacing(6)
 
-        # --- Bottom row filter layout ---
+        # --- Bottom row filter layout (2) ---
         bottom_filter_layout = QHBoxLayout()
         bottom_filter_layout.setContentsMargins(0, 0, 0, 0)
         bottom_filter_layout.setSpacing(6)
@@ -158,13 +185,13 @@ class EndorsementListView(QWidget):
         from_label.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
         to_label.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
 
-        # --- Top row add widget ---
+        # --- Top row add widget (1) ---
         top_filter_layout.addWidget(create_filter_group(category_label, self.category_filter), stretch=1)
         top_filter_layout.addWidget(create_filter_group(status_label, self.status_filter), stretch=1)
         top_filter_layout.addWidget(create_filter_group(prod_code_label, self.prod_code_input), stretch=1)
         top_filter_layout.addWidget(create_filter_group(ref_no_label, self.ref_no_input), stretch=1)
 
-        # --- Bottom row filter layout ---
+        # --- Bottom row filter layout (2) ---
         bottom_filter_layout.addWidget(from_label)
         bottom_filter_layout.addWidget(self.date_from)
         bottom_filter_layout.addWidget(to_label)
@@ -178,6 +205,23 @@ class EndorsementListView(QWidget):
             bottom_filter_layout
         )
     
+    def create_view_other_table_layout(self):
+        view_layout = QHBoxLayout()
+        view_layout.setContentsMargins(0, 0, 0, 0)
+        view_layout.setSpacing(6)
+
+        # -------------- BUTTONS FOR THE LAYOUT -----------------
+        self.excess_sheet_btn = QPushButton("Excess Sheet View")
+        self.excess_sheet_btn.setObjectName("endorsementList-excess-view-btn")
+
+        self.breakdown_lot_sheet = QPushButton("Lot Breakdown View")
+        self.breakdown_lot_sheet.setObjectName("endorsementList-breakdown-view-btn")
+
+        view_layout.addWidget(self.excess_sheet_btn)
+        view_layout.addWidget(self.breakdown_lot_sheet)
+
+        return view_layout
+
     def filter_function(self):
         session = self.Session()
 

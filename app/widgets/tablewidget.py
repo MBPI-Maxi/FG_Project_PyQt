@@ -49,8 +49,8 @@ class TableWidget(QWidget):
         self.finalize_btn.setObjectName("tablewidget-finalize-btn")
         # NOTE: IF THE FINALIZED TABLE IS BEEN CLICKED CREATE A TABLE(SEPARATE WIDGET) TO CONFIRM A THE SECTION ONCE CLICK IT WILL STORE THE EXISTING DATA ON THE DATABASE
         # self.finalize_btn.clicked.connect(lambda: print("finalized btn has been clicked"))
-        self.finalize_btn.clicked.connect(self.finalized_button_logic)
-
+        self.finalize_btn.clicked.connect(self.finalized_button_logic) 
+        
         self.valid_views_to_show_export_btn = [
             "endorsement-list",
         ]

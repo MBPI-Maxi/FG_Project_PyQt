@@ -2,7 +2,6 @@ from sqlalchemy import create_engine
 from sqlalchemy.engine import URL
 from sqlalchemy.exc import OperationalError
 from dotenv import load_dotenv
-# from os import getenv
 import os
 import sys
 
@@ -49,6 +48,14 @@ if environment_value == "MBPI":
         port=os.getenv("DB_PORT"),
         password=os.getenv("DB_PASSWORD")
     )
+    prodcode_db = URL.create(
+        drivername=os.getenv("DB_DRIVER_ALT_PRODCODE_DB"),
+        username=os.getenv("DB_USER_ALT_PRODCODE_DB"),
+        host=os.getenv("DB_HOST_ALT_PRODCODE_DB"),
+        database=os.getenv("DB_NAME_ALT_PRODCODE_DB"),
+        port=os.getenv("DB_PORT_ALT_PRODCODE_DB"),
+        password=os.getenv("DB_PASSWORD_ALT_PRODCODE_DB")
+    )
 elif environment_value == "HOME":
     url = URL.create(
         drivername=os.getenv("DB_DRIVER_HOME"),
@@ -61,11 +68,18 @@ elif environment_value == "HOME":
 else:
     raise ValueError("Environment not valid.")
 
-engine = create_engine(url)
+if prodcode_db:
+    prodcode_engine = create_engine(prodcode_db)
 
+engine = create_engine(url)
 is_connected = None
+is_prodcode_connected = None
+
+
 try:
     with engine.connect() as conn:
         is_connected = True
+    with prodcode_engine.connect() as prod_conn:
+        is_prodcode_connected = True    
 except OperationalError as e:
     is_connected = str(e)

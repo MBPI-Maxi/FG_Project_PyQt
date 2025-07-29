@@ -20,6 +20,8 @@ from app.views.endorsement._EndorsementListView import EndorsementListView
 from app.views.endorsement._HowToUseView import HowToUseView
 from app.views.validatorSchema import EndorsementFormSchema
 
+
+
 from typing import Callable
 from sqlalchemy.orm import Session
 from models import EndorsementModel
@@ -70,7 +72,9 @@ class EndorsementMainView(QWidget):
         )
         self.list_view = EndorsementListView(
             session_factory=self.Session,
-            endorsement=EndorsementModel
+            endorsement=EndorsementModel,
+            endorsement_t2=EndorsementModelT2,
+            endorsemnt_excess=EndorsementLotExcessModel
         )
         self.how_to_use_view = HowToUseView()
         
