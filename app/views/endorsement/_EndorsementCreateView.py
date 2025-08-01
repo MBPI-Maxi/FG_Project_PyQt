@@ -975,6 +975,7 @@ class EndorsementCreateView(QWidget):
                 "Error",
                 f"An unexpected error occurred: {e}"
             )
+            traceback.print_exc()
             session.rollback()
         else:
             StyledMessageBox.information(
