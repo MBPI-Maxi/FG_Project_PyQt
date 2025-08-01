@@ -46,7 +46,7 @@ class MBDefaultValue(Enum):
 class StatusEnum(Enum):
     PASSED = "PASSED"
     FAILED = "FAILED"
-
+ 
 class RemarksEnum(Enum):
     NO_REMARKS = "No Remarks"
     OVERSIZED = "OVERSIZED"
@@ -61,15 +61,17 @@ class TableHeader():
         "endorsement": [
             "Ref No", "Date Endorse", "Category", 
             "Product Code", "Lot Number", 
-            "Qty (kg)", "Status", "Endorsed By", "Source Table",
-            "Has Excess"
+            "Qty (kg)", "Status", "Bag Number",
+            "Endorsed By", 
+            # "Source Table", 
+            # "Has Excess",
         ]
     }
 
     @classmethod
     def get_header(
         cls, 
-        header_name: Literal[
+        form_name_type: Literal[
             "endorsement",
             "deliveryReceipt",
             "outgoingRecord",
@@ -81,10 +83,48 @@ class TableHeader():
             "returnReplacement"
         ]
     ):
-        if not isinstance(header_name, str):
-            raise ValueError("header_name datatype is incorrect")
+        if not isinstance(form_name_type, str):
+            raise ValueError("form_name_type datatype is incorrect")
         
-        if header_name not in cls.LABELS:
-            raise ValueError("header_name value is not valid")
+        if form_name_type not in cls.LABELS:
+            raise ValueError("form_name_type value is not valid")
 
-        return cls.LABELS.get(header_name)
+        return cls.LABELS.get(form_name_type)
+    
+    @classmethod
+    def get_header_index(
+        cls,
+        form_name_type: Literal[
+            "endorsement",
+            "deliveryReceipt",
+            "outgoingRecord",
+            "qcFailedEndorsement",
+            "qcFailedToPassed",
+            "qcLabExcess",
+            "receivingReport",
+            "requisitionLogbook",
+            "returnReplacement"
+        ],
+        header_name: str
+    ) -> int:
+        """
+        Returns the index position of the string in the list based on the header_name argument
+
+        Note for Developer:
+            Use an argument for the header_name that matches the string on the form_name_type labels
+        """
+        if not isinstance(form_name_type, str):
+            raise ValueError("form_name_type datatype is incorrect")
+        
+        if form_name_type not in cls.LABELS:
+            raise ValueError("form_name_type value is not valid")
+
+        index_res = None
+        for idx, element in enumerate(cls.LABELS.get(form_name_type)):
+            if element == header_name.title():
+                index_res = idx
+                break
+
+        return index_res 
+
+        

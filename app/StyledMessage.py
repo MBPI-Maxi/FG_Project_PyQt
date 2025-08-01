@@ -1,4 +1,5 @@
 from PyQt6.QtWidgets import QMessageBox
+from PyQt6.QtCore import Qt
 
 class StyledMessageBox(QMessageBox):
     def __init__(self, parent=None):
@@ -16,29 +17,44 @@ class StyledMessageBox(QMessageBox):
                 background-color: #0078d7;
                 color: white;
                 min-width: 80px;
-                padding: 5px 10px;
+                padding: 10px 10px;
                 border-radius: 4px;
                 font-size: 12px;
             }             
         """)
 
+    @staticmethod
+    def _apply_text_format(msgBox: QMessageBox, use_rich_text: bool):
+        if use_rich_text:
+            msgBox.setTextFormat(Qt.TextFormat.RichText)
+        
     @classmethod
-    def information(cls, parent, title, message):
+    def information(cls, parent, title, message, setTextFormat=False):
         msg = cls(parent)
         msg.setIcon(QMessageBox.Icon.Information)
         msg.setWindowTitle(title)
+        
+        # ------------- THIS WILL READ THE STRING AS AN HTML FORMAT STRING -----------
+        cls._apply_text_format(msg, setTextFormat)
+        
         msg.setText(message)
         msg.setStandardButtons(QMessageBox.StandardButton.Ok)
         
+        ok_btn = msg.button(QMessageBox.StandardButton.Ok)
+        ok_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+
         msg.exec()
         
         return msg
 
     @classmethod
-    def warning(cls, parent, title, message):
+    def warning(cls, parent, title, message, setTextFormat=False):
         msg = cls(parent)
         msg.setIcon(QMessageBox.Icon.Warning)
         msg.setWindowTitle(title)
+
+        cls._apply_text_format(msg, setTextFormat)
+
         msg.setText(message)
         msg.setStandardButtons(QMessageBox.StandardButton.Ok)
         
@@ -47,10 +63,12 @@ class StyledMessageBox(QMessageBox):
         return msg
 
     @classmethod
-    def critical(cls, parent, title, message):
+    def critical(cls, parent, title, message, setTextFormat=False):
         msg = cls(parent)
         msg.setIcon(QMessageBox.Icon.Critical)
         msg.setWindowTitle(title)
+
+        cls._apply_text_format(msg, setTextFormat)
         msg.setText(message)
         msg.setStandardButtons(QMessageBox.StandardButton.Ok)
 
@@ -59,18 +77,24 @@ class StyledMessageBox(QMessageBox):
         return msg
 
     @classmethod
-    def question(cls, parent, title, message):
+    def question(cls, parent, title, message, setTextFormat=False):
         msg = cls(parent)
         msg.setIcon(QMessageBox.Icon.Question)
         msg.setWindowTitle(title)
+        cls._apply_text_format(msg, setTextFormat)
         msg.setText(message)
         msg.setStandardButtons(
             QMessageBox.StandardButton.Yes | 
             QMessageBox.StandardButton.No
         )
         
-        return msg.exec()
+        yes_btn = msg.button(QMessageBox.StandardButton.Yes)
+        no_btn = msg.button(QMessageBox.StandardButton.No)
 
+        yes_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        no_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        
+        return msg.exec()
 
 class TerminalCustomStylePrint():
     """Utility for styled terminal messages and exceptions"""

@@ -10,10 +10,10 @@ from PyQt6.QtWidgets import (
 
 from PyQt6.QtCore import QDate
 
-from app.helpers import load_styles
+from app.helpers import load_styles, button_cursor_pointer
 from app.widgets import ModifiedComboBox, ModifiedDateEdit, TableWidget
 from constants.Enums import CategoryEnum, StatusEnum
-from typing import Callable, Type
+from typing import Callable, Type, Union
 from sqlalchemy.orm import Session, DeclarativeMeta
 
 import os
@@ -23,15 +23,37 @@ class EndorsementListView(QWidget):
     def __init__(
         self, 
         session_factory: Callable[..., Session],
-        endorsement_combined_view: Type[DeclarativeMeta],
+        endorsement: Type[DeclarativeMeta],
+        endorsement_t2: Type[DeclarativeMeta],
+        endorsemnt_excess: Type[DeclarativeMeta],
         parent=None
     ):
         super().__init__(parent)
         self.Session = session_factory
         self.table_widget = TableWidget
-        self.endorsement_combined_view = endorsement_combined_view
+        self.endorsement = endorsement
+        self.endorsement_t2 = endorsement_t2
+        self.endorsement_excess = endorsemnt_excess
         self.setup_ui()
         self.apply_styles()
+
+    @staticmethod
+    def create_filter_group(
+        label: Type[QLabel], 
+        widget: Union[QLineEdit, ModifiedComboBox]
+    ):
+        group = QWidget()
+        layout = QVBoxLayout(group)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(2)
+        layout.addWidget(label)
+        layout.addWidget(widget)
+            
+        return group
+
+    @staticmethod
+    def set_table_policy(table: Type[TableWidget]) -> None:
+        table.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         
     def setup_ui(self):
         layout = QVBoxLayout()
@@ -39,11 +61,13 @@ class EndorsementListView(QWidget):
         layout.setSpacing(6)
 
         top_filter_layout, bottom_filter_layout = self.create_filter_layout()
+        view_btn_layout = self.create_view_other_table_layout()
         self.table = self.show_table()
 
         # ------------- Add all to main layout ----------------
         layout.addLayout(top_filter_layout)
         layout.addLayout(bottom_filter_layout)
+        layout.addLayout(view_btn_layout)
         layout.addWidget(self.table)
         layout.setStretch(2, 1)
 
@@ -63,17 +87,36 @@ class EndorsementListView(QWidget):
         current_dir = os.path.dirname(__file__)
         qss_path = os.path.join(current_dir, "..", "styles", "endorsement_list.css")
         qss_path = os.path.abspath(qss_path)
+        button_cursor_pointer(self.list_reset_btn)
+        button_cursor_pointer(self.search_button)
+        button_cursor_pointer(self.excess_sheet_btn)
+        button_cursor_pointer(self.breakdown_lot_sheet)
 
         load_styles(qss_path, self)
     
     def show_table(self):
         table = self.table_widget(
             session_factory=self.Session,
-            db_model=self.endorsement_combined_view,
+            db_model=self.endorsement,
             view_type="endorsement-list"
         )
-        table.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+       
+        self.set_table_policy(table=table)
+        table.load_data()
         
+        return table
+
+    def excess_view_table(self):
+        # -------- FOR THIS SAME HEADERS SHOULD BE APPLY --------
+        table = self.table_widget(
+            session_factory=self.Session,
+            db_model=self.endorsement_excess,
+            view_type="endorsement-list"
+        )
+
+        self.set_table_policy(table=table)
+        table.load_data()
+
         return table
 
     def create_category_menu(self):
@@ -88,19 +131,12 @@ class EndorsementListView(QWidget):
         for status in StatusEnum:
             self.status_filter.addItem(status.value, status)
 
-        self.status_filter.addItem("All")
+        self.status_filter.addItem("ALL")
         self.status_filter.setCurrentText("ALL")
 
     def create_filter_layout(self):
-        def create_filter_group(label, widget):
-            group = QWidget()
-            layout = QVBoxLayout(group)
-            layout.setContentsMargins(0, 0, 0, 0)
-            layout.setSpacing(2)
-            layout.addWidget(label)
-            layout.addWidget(widget)
-            
-            return group
+        create_filter_group = self.create_filter_group
+        
         # ------------- FILTERS ----------------
         self.category_filter = ModifiedComboBox()
         self.status_filter = ModifiedComboBox()
@@ -131,12 +167,12 @@ class EndorsementListView(QWidget):
         self.search_button = QPushButton("Search")
         self.search_button.setObjectName("endorsementList-search-btn")
 
-        # --- Top row filter layout ---
+        # --- Top row filter layout (1) ---
         top_filter_layout = QHBoxLayout()
         top_filter_layout.setContentsMargins(0, 0, 0, 0)
         top_filter_layout.setSpacing(6)
 
-        # --- Bottom row filter layout ---
+        # --- Bottom row filter layout (2) ---
         bottom_filter_layout = QHBoxLayout()
         bottom_filter_layout.setContentsMargins(0, 0, 0, 0)
         bottom_filter_layout.setSpacing(6)
@@ -149,13 +185,13 @@ class EndorsementListView(QWidget):
         from_label.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
         to_label.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
 
-        # --- Top row add widget ---
+        # --- Top row add widget (1) ---
         top_filter_layout.addWidget(create_filter_group(category_label, self.category_filter), stretch=1)
         top_filter_layout.addWidget(create_filter_group(status_label, self.status_filter), stretch=1)
         top_filter_layout.addWidget(create_filter_group(prod_code_label, self.prod_code_input), stretch=1)
         top_filter_layout.addWidget(create_filter_group(ref_no_label, self.ref_no_input), stretch=1)
 
-        # --- Bottom row filter layout ---
+        # --- Bottom row filter layout (2) ---
         bottom_filter_layout.addWidget(from_label)
         bottom_filter_layout.addWidget(self.date_from)
         bottom_filter_layout.addWidget(to_label)
@@ -169,41 +205,74 @@ class EndorsementListView(QWidget):
             bottom_filter_layout
         )
     
+    def create_view_other_table_layout(self):
+        view_layout = QHBoxLayout()
+        view_layout.setContentsMargins(0, 0, 0, 0)
+        view_layout.setSpacing(6)
+
+        # -------------- BUTTONS FOR THE LAYOUT -----------------
+        self.excess_sheet_btn = QPushButton("Excess Sheet View")
+        self.excess_sheet_btn.setObjectName("endorsementList-excess-view-btn")
+
+        self.breakdown_lot_sheet = QPushButton("Lot Breakdown View")
+        self.breakdown_lot_sheet.setObjectName("endorsementList-breakdown-view-btn")
+
+        view_layout.addWidget(self.excess_sheet_btn)
+        view_layout.addWidget(self.breakdown_lot_sheet)
+
+        return view_layout
+
     def filter_function(self):
         session = self.Session()
 
         try:
             ref_no_filter = self.ref_no_input.text().strip()
             prod_code_filter = self.prod_code_input.text().strip()
-            status_code_filter = self.status_filter.currentText().strip()
+            status_code_filter = self.status_filter.currentText().strip().upper()
+            category_filter = self.category_filter.currentText().strip().upper()
 
-            query = session.query(self.endorsement_combined_view)
-
+            query = session.query(self.endorsement)
+            
+            # ---------------- FILTER LOGIC FOR REFERENCE NUMBER -----------------
             if ref_no_filter:
-                query = query.filter(self.endorsement_combined_view.t_refno.ilike(f"%{ref_no_filter}%"))
+                query = query.filter(self.endorsement.t_refno.ilike(f"%{ref_no_filter}%"))
             
+            # --------------- FILTER LOGIC FOR PRODUCTION CODE -------------------
             if prod_code_filter:
-                query = query.filter(self.endorsement_combined_view.t_prodcode.ilike(f"%{prod_code_filter}%"))
+                query = query.filter(self.endorsement.t_prodcode.ilike(f"%{prod_code_filter}%"))
 
-            if status_code_filter:
+            # -------------- FILTER LOGIC FOR THE STATUS ------------------------
+            if status_code_filter != "ALL":
                 query = query.filter(
-                    self.endorsement_combined_view.t_status == status_code_filter
-                )
-
-            if self.date_from.date() <= self.date_to.date():
-                query = query.filter(
-                    self.endorsement_combined_view.t_date_endorsed >= self.date_from.date().toPyDate(),
-                    self.endorsement_combined_view.t_date_endorsed <= self.date_to.date().toPyDate()
+                    self.endorsement.t_status == status_code_filter
                 )
             
-            if self.category_filter.currentText() != "ALL":
+            if status_code_filter == "ALL":
+                query = query.filter(
+                    self.endorsement.t_status.in_([StatusEnum.PASSED.value, StatusEnum.FAILED.value])
+                )
+
+            # -------------------  FILTER LOGIC FOR THE CATEGORY ----------------------
+            if category_filter != "ALL":
                 selected_category = self.category_filter.currentData()
 
                 if selected_category:  # Ensure we have valid category data
-                    query = query.filter(self.endorsement_combined_view.t_category == selected_category.value)
-            
-            results = query.order_by(self.endorsement_combined_view.t_date_endorsed.desc()).all()
+                    query = query.filter(self.endorsement.t_category == selected_category.value)
 
+            if category_filter == "ALL":
+                query = query.filter(
+                    self.endorsement.t_category.in_([CategoryEnum.MB.value, CategoryEnum.DC.value])
+                )
+
+            # --------------------  FILTER LOGIC FOR THE DATES -----------------------
+            if self.date_from.date() <= self.date_to.date():
+                query = query.filter(
+                    self.endorsement.t_date_endorsed >= self.date_from.date().toPyDate(),
+                    self.endorsement.t_date_endorsed <= self.date_to.date().toPyDate()
+                )
+            
+            # UPDATES THE TABLE BY CALLING THE .update_table_with_results in the TableWidget class
+            results = query.order_by(self.endorsement.t_date_endorsed.desc()).all()
             self.table.update_table_with_results(results, apply_pagination=True)
         finally:
             session.close()
@@ -217,5 +286,5 @@ class EndorsementListView(QWidget):
         for input_widget in filter_objects:
             if isinstance(input_widget, QLineEdit):
                 input_widget.clear()
-             
-        self.table.load_data()
+        
+        self.table.reload_table()

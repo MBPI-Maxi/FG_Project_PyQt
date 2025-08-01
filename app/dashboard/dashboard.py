@@ -18,7 +18,7 @@ from app.views import (
 from app.views.endorsement import EndorsementMainView
 
 
-from app.helpers import load_styles
+from app.helpers import load_styles, button_cursor_pointer, get_default_mac, get_ip_address
 from PyQt6.QtGui import QFont
 from PyQt6.QtCore import QSize, QTimer
 from typing import Type, Callable
@@ -124,8 +124,11 @@ class FGDashboard(QMainWindow):
         self.time_label = QLabel()
         self.time_label.setObjectName("FGDashboard-status-time-label")
 
-        self.powered_by_software = QLabel("Powered by PYQT6")
+        self.powered_by_software = QLabel("Powered by PyQt6")
         self.program_credits = QLabel("Developed by: IT Department Team")
+
+        self.default_ip_address = QLabel(get_ip_address())
+        self.default_mac_address = QLabel(get_default_mac())
         
         # icon for db_status_icon_label
         self.db_status_icon_label.setPixmap(
@@ -142,6 +145,10 @@ class FGDashboard(QMainWindow):
         self.status_bar.addPermanentWidget(self.db_status_text_label)
         self.status_bar.addPermanentWidget(create_separator())
         self.status_bar.addPermanentWidget(self.time_label)
+        self.status_bar.addPermanentWidget(create_separator())
+        self.status_bar.addPermanentWidget(self.default_ip_address)
+        self.status_bar.addPermanentWidget(create_separator())
+        self.status_bar.addPermanentWidget(self.default_mac_address)
 
         self.status_timer = QTimer(self)
         self.status_timer.timeout.connect(
@@ -193,18 +200,22 @@ class FGDashboard(QMainWindow):
         btn_endorsement = QPushButton("  Endorsement Form")
         btn_endorsement.setIcon(qta.icon("fa5s.file-signature", color="#ecf0f1"))
         btn_endorsement.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(0))
+        button_cursor_pointer(btn_endorsement)
           
         btn_qc_failed_to_passed = QPushButton("  QC Failed → Passed")
         btn_qc_failed_to_passed.setIcon(qta.icon("fa5s.check-double", color="#ecf0f1"))
         btn_qc_failed_to_passed.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(1))  # Index 1
+        button_cursor_pointer(btn_qc_failed_to_passed)
 
         btn_qc_lab_excess = QPushButton("  QC Lab Excess Sheet")
         btn_qc_lab_excess.setIcon(qta.icon("fa5s.vials", color="#ecf0f1"))
         btn_qc_lab_excess.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(2))  # Index 2
+        button_cursor_pointer(btn_qc_lab_excess)
 
         btn_receiving_report = QPushButton("  Receiving Report")
         btn_receiving_report.setIcon(qta.icon("fa5s.file-invoice", color="#ecf0f1"))
         btn_receiving_report.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(3))  # Index 3
+        button_cursor_pointer(btn_receiving_report)
 
         layout.addWidget(btn_endorsement)
         layout.addWidget(btn_qc_failed_to_passed)
@@ -220,22 +231,27 @@ class FGDashboard(QMainWindow):
         btn_delivery_receipt = QPushButton("  Delivery Receipt")
         btn_delivery_receipt.setIcon(qta.icon("fa5s.truck", color="#ecf0f1"))
         btn_delivery_receipt.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(4))  # Index 5
+        button_cursor_pointer(btn_delivery_receipt)
 
         btn_rrf = QPushButton("  Return Replacement")
         btn_rrf.setIcon(qta.icon("fa5s.exchange-alt", color="#ecf0f1"))
         btn_rrf.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(5))  # Index 5
+        button_cursor_pointer(btn_rrf)
 
         btn_outgoing_form = QPushButton("  Outgoing Record Form")
         btn_outgoing_form.setIcon(qta.icon("fa5s.file-export", color="#ecf0f1"))
         btn_outgoing_form.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(6))  # Index 6
+        button_cursor_pointer(btn_outgoing_form)
 
         btn_logbook = QPushButton("  Requisition Logbook")
         btn_logbook.setIcon(qta.icon("fa5s.book", color="#ecf0f1"))
         btn_logbook.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(7))  # Index 7
+        button_cursor_pointer(btn_logbook)
 
         btn_qc_failed_out = QPushButton("  QC Failed Endorsement")
         btn_qc_failed_out.setIcon(qta.icon("fa5s.times-circle", color="#ecf0f1"))
         btn_qc_failed_out.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(8))  # Index 8
+        button_cursor_pointer(btn_qc_failed_out)
 
         layout.addWidget(btn_delivery_receipt)
         layout.addWidget(btn_rrf)
@@ -249,6 +265,7 @@ class FGDashboard(QMainWindow):
         btn_logout = QPushButton("  Logout")
         btn_logout.setIcon(qta.icon("fa5s.sign-out-alt", color="#ecf0f1"))
         btn_logout.clicked.connect(self.close_dashboard_main_window)
+        button_cursor_pointer(btn_logout)
         
         layout.addWidget(btn_logout)
 

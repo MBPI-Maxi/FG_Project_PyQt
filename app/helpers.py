@@ -2,21 +2,36 @@
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QPushButton, QWidget
 from sqlalchemy import text
-from sqlalchemy.orm import Session, DeclarativeMeta
+from sqlalchemy.orm import Session, DeclarativeMeta, sessionmaker
+from sqlalchemy.engine import Engine
 from typing import Type, Dict, Any
 from constants.Enums import CategoryEnum
-
 from app.StyledMessage import TerminalCustomStylePrint
 
-# from enum import Enum
-# import json
-# import datetime
-
+import uuid
+import socket
 
 class ButtonCursorError(BaseException):
     pass
 
+# FOR GETTING MAC ADDRESS TO BE DISPLAYED IN THE STATUS BAR
+def get_default_mac():
+    mac = uuid.getnode()
+    mac_formatted = ':'.join(f"{((mac >> elements) & 0xff):02x}" for elements in range(0, 8*6, 8)[::-1])
+    
+    return mac_formatted
 
+# FOR GETTING THE DEFAULT LOCAL IP ADDRESS (USE NETIFACES LIB FOR CONSISTENCY)
+def get_ip_address():
+    hostname = socket.gethostname()
+    all_ips = socket.gethostbyname_ex(hostname)[2]
+    
+    return all_ips[-1]
+
+def create_session(engine: Engine) -> sessionmaker[Session]:
+    session_factory = sessionmaker(engine)
+    
+    return session_factory
 
 # FOR CREATING CURSOR POINTER ON BUTTON
 def button_cursor_pointer(button_widget: Type[QPushButton]):
@@ -26,7 +41,6 @@ def button_cursor_pointer(button_widget: Type[QPushButton]):
         )
     else:
         raise ButtonCursorError("argument is not a QPushButton instance")
-
 
 # FOR LOGGING AUTH LOGS
 def record_auth_log(
@@ -110,15 +124,15 @@ def populate_endorsement_items(
     endorsement_lot_excess_model: Type[DeclarativeMeta],
     validated_data,
     category,
-    has_excess,
+    has_excess
 ):
     t2_items = []
-    # excess_items = []
 
     validated_lot_number = validated_data.t_lotnumberwhole
     validated_qtykg = validated_data.t_qtykg
     validated_wtlot = validated_data.t_wtlot
-
+    validated_t_bag_num = validated_data.t_bag_num
+ 
     if "-" in validated_lot_number:
         start_num, end_num, suffix = parse_lot_range(validated_lot_number)
         remaining_qty = validated_qtykg
@@ -132,7 +146,8 @@ def populate_endorsement_items(
                         endorsement_model_t2(
                             t_refno=validated_data.t_refno,
                             t_lotnumbersingle=lot_code,
-                            t_qty=validated_wtlot
+                            t_qty=validated_wtlot,
+                            t_bag_num=validated_t_bag_num
                         )
                     )
                     remaining_qty -= validated_wtlot
@@ -142,7 +157,8 @@ def populate_endorsement_items(
                         excess_t2_item = endorsement_model_t2(
                             t_refno=validated_data.t_refno,
                             t_lotnumbersingle=lot_code,
-                            t_qty=round(remaining_qty, 2)
+                            t_qty=round(remaining_qty, 2),
+                            t_bag_num=validated_t_bag_num
                         )
                         
                         # Then create the excess item linked to it
@@ -162,7 +178,8 @@ def populate_endorsement_items(
                     endorsement_model_t2(
                         t_refno=validated_data.t_refno,
                         t_lotnumbersingle=lot_code,
-                        t_qty=validated_wtlot
+                        t_qty=validated_wtlot,
+                        t_bag_num=validated_t_bag_num
                     )
                 )
     else:
@@ -177,7 +194,8 @@ def populate_endorsement_items(
                     endorsement_model_t2(
                         t_refno=validated_data.t_refno,
                         t_lotnumbersingle=validated_lot_number,
-                        t_qty=validated_wtlot
+                        t_qty=validated_wtlot,
+                        t_bag_num=validated_t_bag_num
                     )
                 )
 
@@ -187,7 +205,8 @@ def populate_endorsement_items(
                 excess_t2_item = endorsement_model_t2(
                     t_refno=validated_data.t_refno,
                     t_lotnumbersingle=validated_lot_number,
-                    t_qty=excess
+                    t_qty=excess,
+                    t_bag_num=validated_t_bag_num
                 )
                 
                 # Create and link the excess record
@@ -201,16 +220,17 @@ def populate_endorsement_items(
                 
                 t2_items.append(excess_t2_item)
         else:
-            # No excess logic, just add normally
+            # ---- No excess logic, just add normally ----
             t2_items.append(
                 endorsement_model_t2(
                     t_refno=validated_data.t_refno,
                     t_lotnumbersingle=validated_lot_number,
-                    t_qty=validated_qtykg
+                    t_qty=validated_qtykg,
+                    t_bag_num=validated_t_bag_num
                 )
             )
 
-    # Attach to parent model
+    # ATTACH TO THE PARENT MODEL
     endorsement_model.endorsement_t2_items = t2_items
 # ------------------------------------------------------------------------------------------
 
@@ -226,31 +246,16 @@ def insert_existing_lot_t2(
         print(True)
 
 
-# def insert_existing_lot_t2(
-#     existing_lot_instance: object,
-#     endorsement_model: Type[DeclarativeMeta]
-# ): 
-#     if isinstance(type(existing_lot_instance), DeclarativeMeta) and isinstance(endorsement_model, DeclarativeMeta):
-#         details = {}
+# def resource_path(relative_path):
+#     """ Get absolute path to resource, works for dev and for PyInstaller """
+#     try:
+#         # PyInstaller creates a temp folder and stores path in _MEIPASS
+#         base_path = sys._MEIPASS
+#     except Exception:
+#         # Not running in a bundle, so the base path is the project root
+#         # This assumes your main script is in the project root.
+#         # Adjust if necessary, for example, if your helpers.py is one level down:
+#         # base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+#         base_path = os.path.abspath(".")
 
-#         for column in endorsement_model.__table__.columns:
-#             key = column.name
-#             value = getattr(existing_lot_instance, key)
-
-#             if isinstance(value, Enum):
-#                 value = value.value
-            
-#             if isinstance(value, (datetime.date, datetime.datetime)):
-#                 value = value.isoformat()
-
-#             details[key] = value
-
-#         detailed_str = json.dumps(details, indent=4, default=str)
-
-#         # TerminalCustomStylePrint.terminal_message_custom_format(detailed_str)
-#         return detailed_str
-#     else:
-#         TerminalCustomStylePrint.raise_red_flag(
-#             f"{insert_existing_lot_t2.__name__} argument/s are incorrect. This is a developer error.",
-#             has_QMessageBox=True
-#         )
+#     return os.path.join(base_path, relative_path)

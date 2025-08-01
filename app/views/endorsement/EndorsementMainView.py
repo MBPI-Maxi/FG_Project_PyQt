@@ -14,11 +14,13 @@ from models import (
     User
 )
 
-from app.helpers import load_styles
+from app.helpers import load_styles, button_cursor_pointer
 from app.views.endorsement._EndorsementCreateView import EndorsementCreateView
 from app.views.endorsement._EndorsementListView import EndorsementListView
 from app.views.endorsement._HowToUseView import HowToUseView
 from app.views.validatorSchema import EndorsementFormSchema
+
+
 
 from typing import Callable
 from sqlalchemy.orm import Session
@@ -70,7 +72,9 @@ class EndorsementMainView(QWidget):
         )
         self.list_view = EndorsementListView(
             session_factory=self.Session,
-            endorsement_combined_view=EndorsementCombinedView
+            endorsement=EndorsementModel,
+            endorsement_t2=EndorsementModelT2,
+            endorsemnt_excess=EndorsementLotExcessModel
         )
         self.how_to_use_view = HowToUseView()
         
@@ -81,7 +85,7 @@ class EndorsementMainView(QWidget):
 
         # --------------------- Connect signals -----------------------
         self.create_btn.clicked.connect(lambda: self.stacked_widget.setCurrentWidget(self.create_view))
-        self.list_btn.clicked.connect(lambda: self.stacked_widget.setCurrentWidget(self.list_view))
+        self.list_btn.clicked.connect(self.update_table_on_click)
         self.how_to_use_btn.clicked.connect(lambda: self.stacked_widget.setCurrentWidget(self.how_to_use_view))
         
         # ----------------------- When a record is selected in list view for editing -------------------------------
@@ -92,12 +96,19 @@ class EndorsementMainView(QWidget):
         self.setLayout(self.layout)
     
     def apply_styles(self):
-        # qss_path = os.path.join(os.path.dirname(__file__), "styles", "crud_btn.css")
         current_dir = os.path.dirname(__file__)
         qss_path = os.path.join(current_dir, "..", "styles", "crud_btn.css")
         qss_path = os.path.abspath(qss_path)
+
+        button_cursor_pointer(self.create_btn)
+        button_cursor_pointer(self.list_btn)
+        button_cursor_pointer(self.how_to_use_btn)
         
         load_styles(qss_path, self)
+
+    def update_table_on_click(self):
+        self.stacked_widget.setCurrentWidget(self.list_view)
+        self.list_view.table.load_data()
 
     def show_update_view(self, ref_no):
         """Load data for editing and switch to update view"""

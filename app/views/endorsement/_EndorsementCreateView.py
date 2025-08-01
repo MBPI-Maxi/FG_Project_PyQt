@@ -9,14 +9,14 @@ from PyQt6.QtWidgets import (
     QPushButton,
     QLineEdit,
     QDateEdit,
-    QCheckBox,
-    QSpinBox
+    QCheckBox
 )
 from app.helpers import (
     fetch_current_t_refno_in_endorsement,
     populate_endorsement_items,
     load_styles,
-    button_cursor_pointer
+    button_cursor_pointer,
+    create_session
 )
 
 from app.widgets import (
@@ -24,22 +24,30 @@ from app.widgets import (
     TableWidget,
     LotNumberLineEdit,
     ModifiedDateEdit,
-    ModifiedDoubleSpinBox
+    ModifiedDoubleSpinBox,
+    ModifiedSpinBox,
+    ModifiedCheckbox
 )
 
-from PyQt6.QtCore import Qt, QDate
-from app.StyledMessage import StyledMessageBox, TerminalCustomStylePrint
-from typing import Callable, Type, Union, Dict, Any
+from PyQt6.QtCore import Qt, QDate, QTimer
+from app.StyledMessage import StyledMessageBox
+from typing import Callable, Type, Union, Dict, Any, List
 from constants.Enums import CategoryEnum, StatusEnum, RemarksEnum
 from constants.mapped_user import mapped_user_to_display
 
 from sqlalchemy.orm import Session, DeclarativeMeta
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy import MetaData, Table, select
 from pydantic import BaseModel, ValidationError
+from datetime import datetime
 
-import math
 import json
+import math
+import traceback
 import os
+
+# IMPORT THE DATABASE HERE FOR THE 'dbinv' in postgres passed as an instance agurment
+from config.db import prodcode_engine
 
 
 class EndorsementCreateView(QWidget):
@@ -57,28 +65,37 @@ class EndorsementCreateView(QWidget):
         super().__init__(parent)
         self.setWindowTitle("Endorsement Form")
         self.setObjectName("EndorsementForm")
-        
+
         self.Session = session_factory
         self.endorsement_t1 = endorsement_t1
-        self.enodrsement_t2 = endorsement_t2
+        self.endorsement_t2 = endorsement_t2
         self.endorsement_combined_view = endorsement_combined_view
         self.endorsement_lot_excess = endorsement_lot_excess
         self.endorsement_form_schema = endorsement_form_schema
         self.user_model = user_model
-       
+
+        # -------------------- THIS IS FOR THE TIMER IN PRODCODE EXECUTION ------------------
+        self.db_fetch_timer = QTimer()
+        self.db_fetch_timer.setSingleShot(True)
+        self.db_fetch_timer.timeout.connect(self._fetch_codes_from_database)
+        self.pending_db_text = ""
+
         self.table_widget = self.show_table()
         self.init_ui()
         self.apply_styles()
-
-    def init_ui(self):
-        # ------------ HELPER FUNCTION IN CREATING INPUT ROWS ------------
-        # NOTE: MAKE THIS INTO A STATICMETHOD FUNCTION INSTEAD. SHOULD BE NO INNER FUNCTION ON A METHOD
-        def create_input_row(
+    
+    @staticmethod
+    def create_input_row(
             label_text: str,
             widget: Type[QWidget],
             field_name: str,
-            error_label_name: str
+            error_label_name: str,
+            parent: Type[QWidget]
         ):
+            """
+            Info:
+                Helper function in creating input rows
+            """
             # ------------ Main container for the entire row -------------
             row_container = QWidget()
             row_layout = QHBoxLayout(row_container)
@@ -114,11 +131,63 @@ class EndorsementCreateView(QWidget):
             row_layout.setStretch(2, 1)  # Let error label expand
             
             # -----------------  Store references -------------------------
-            self.form_fields[field_name] = widget
-            self.form_fields[error_label_name] = error_label
+            parent.form_fields[field_name] = widget
+            parent.form_fields[error_label_name] = error_label
             
-            self.main_layout.addWidget(row_container)
+            parent.main_layout.addWidget(row_container)
+            
+    @staticmethod
+    def toggle_lot_number_mask(state: int, parent: Type[QWidget]) -> None:
+        checked_state = 2
+        unchecked_state = 0
+        
+        parent.t_lotnumberwhole_input.clear()
 
+        if state == checked_state:
+            parent.t_lotnumberwhole_input.setInputMask("0000AA-0000AA; ")
+        elif state == unchecked_state:
+            parent.t_lotnumberwhole_input.setInputMask("0000AA; ")
+        
+        parent.t_lotnumberwhole_input.setFocus()
+        parent.t_lotnumberwhole_input.setCursorPosition(0)
+    
+    @staticmethod
+    def load_codes_from_cache() -> list:
+        try:
+            current_dir = os.path.dirname(__file__)
+            # path = os.path.join(current_dir, "views", "cache", "prodcode.json")
+            path = os.path.join(current_dir, "..", "cache", "prodcode.json")
+            
+            if os.path.exists(path):
+
+                with open(path, "r", encoding="utf-8") as f:
+                    return json.load(f).get("data", [])
+                    
+        except Exception:
+            traceback.print_exc()
+
+        return []
+    
+    @staticmethod
+    def save_codes_to_cache(codes: list):
+        try:
+            payload = {
+                "date": datetime.now().strftime("%Y-%m-%d"),
+                "data": codes,
+                "total_length": len(codes)
+            }
+            # cache_path = os.path.join(BASE_DIR, "views", "cache", "prodcode.json")
+            cache_path = os.path.join(os.path.dirname(__file__), "..", "views", "cache", "prodcode.json")
+            os.makedirs(os.path.dirname(cache_path), exist_ok=True)
+
+            with open(cache_path, "w", encoding="utf-8") as f:
+                json.dump(payload, f, ensure_ascii=False, indent=4)
+            print(f"Cache updated: {cache_path}")
+
+        except Exception:
+            traceback.print_exc()
+
+    def init_ui(self):
         # -------------------  Main container with vertical layout ----------------------------
         form_container = QWidget()
         self.main_layout = QVBoxLayout(form_container)
@@ -133,19 +202,21 @@ class EndorsementCreateView(QWidget):
         form_scroll.setWidgetResizable(True)
         form_scroll.setWidget(form_container)
         form_scroll.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-    
+        
         # -------------   Create all form rows with scrollable inputs --------------------------
-        self.create_t_refno_row(create_input_row)
-        self.create_date_endorsed_row(create_input_row)
-        self.create_category_row(create_input_row)
-        self.create_prod_code_row(create_input_row)
-        self.create_lot_number_row(create_input_row)
-        self.create_weight_per_lot_row(create_input_row)
-        self.create_qtykg_row(create_input_row)
-        self.create_bag_input_row(create_input_row)
-        self.create_status_row(create_input_row)
-        self.create_endorsed_by_input_row(create_input_row)
-        self.create_remarks_input_row(create_input_row)
+        input_row_func = self.create_input_row
+
+        self.create_t_refno_row(input_row_func)
+        self.create_date_endorsed_row(input_row_func)
+        self.create_category_row(input_row_func)
+        self.create_prod_code_row(input_row_func)
+        self.create_lot_number_row(input_row_func)
+        self.create_qtykg_row(input_row_func)
+        self.create_weight_per_lot_row(input_row_func)
+        self.create_bag_input_row(input_row_func)
+        self.create_status_row(input_row_func)
+        self.create_endorsed_by_input_row(input_row_func)
+        self.create_remarks_input_row(input_row_func)
 
         # --------------  Add save button (outside the scroll area) -------------------------
         self.save_button = QPushButton("Save Endorsement")
@@ -182,7 +253,8 @@ class EndorsementCreateView(QWidget):
     def show_table(self):
         table = TableWidget(
             session_factory=self.Session, 
-            db_model=self.endorsement_combined_view, 
+            # db_model=self.endorsement_combined_view, # CHANGE THIS  
+            db_model=self.endorsement_t1,
             view_type="endorsement-create", 
             parent=self,
         )
@@ -193,10 +265,20 @@ class EndorsementCreateView(QWidget):
     def validate_lot_quantity(self):
         """Real-time validation of lot quantity proportion with strict excess checking"""
         try:
-            lot_text = self.t_lotnumberwhole_input.text()
-            qty = self.t_qtykg_input.value()
-            wtlot = self.t_wtlot_input.value()
-            has_excess = self.has_excess_checkbox.isChecked()
+            # Get the actual input widgets
+            lot_widget = self.form_fields["t_lotnumberwhole"]
+            if hasattr(lot_widget, 'text'):  # Direct QLineEdit access
+                lot_text = lot_widget.text()
+            else:  # Container widget case
+                lot_text = lot_widget.findChild(QLineEdit).text()
+                
+            qty = self.form_fields["t_qtykg"].value()
+            
+            # Get weight per lot value directly from the spinbox
+            wtlot = self.t_wtlot_input.value()  # Use the instance variable directly
+            
+            # Get excess checkbox state
+            has_excess = self.has_excess_checkbox.isChecked()  # Use the instance variable directly
             
             # ------------- Clear any existing messages if fields are empty -----------------
             if not lot_text or wtlot <= 0:
@@ -234,8 +316,8 @@ class EndorsementCreateView(QWidget):
                             )
                             return
                             
-                except (ValueError, IndexError):
-                    self.show_quantity_error("Invalid lot number format")
+                except (IndexError, ValueError):
+                    # traceback.print_exc()
                     return
             else:
                 # ---------------- Single lot validation ------------------
@@ -254,12 +336,13 @@ class EndorsementCreateView(QWidget):
                             require_excess=True
                         )
                         return
-            
             # ----------------- Clear messages if validation passes -----------------------
             self.clear_quantity_error()
             
         except Exception as e:
             print(f"Validation error: {e}")
+            
+            traceback.print_exc()
             return
 
     def show_quantity_error(self, message, require_excess=False):
@@ -351,29 +434,17 @@ class EndorsementCreateView(QWidget):
     # ---------------- for lot number row ---------------
     def create_lot_number_row(
         self, 
-        create_input_row: Callable[[str, Union[QWidget, QLineEdit], str, str], None]
+        create_input_row: Callable[[str, Union[QWidget, QLineEdit], str, str, QWidget], None]
     ) -> None:
-        self.t_use_whole_lot_checkbox = QCheckBox("Whole Lot")
+        # ------------------ WHOLE LOT CHECKBOX --------------------
+        self.t_use_whole_lot_checkbox = QCheckBox("Lot Range")
         self.t_use_whole_lot_checkbox.setObjectName("endorsement-toggle-lot")
-        
+
         self.t_lotnumberwhole_input = LotNumberLineEdit()
         
-        def toggle_lot_number_mask(state) -> None:
-            checked_state = 2
-            unchecked_state = 0
-
-            self.t_lotnumberwhole_input.clear()
-
-            if state == checked_state:
-                self.t_lotnumberwhole_input.setInputMask("0000AA-0000AA; ")
-                
-            elif state == unchecked_state:
-                self.t_lotnumberwhole_input.setInputMask("0000AA; ")
-            
-            self.t_lotnumberwhole_input.setFocus()
-            self.t_lotnumberwhole_input.setCursorPosition(0)
-
-        self.t_use_whole_lot_checkbox.stateChanged.connect(toggle_lot_number_mask)
+        self.t_use_whole_lot_checkbox.stateChanged.connect(
+            lambda state: self.toggle_lot_number_mask(state, self)
+        )
 
         # ------------- default -------------------
         self.t_lotnumberwhole_input.setInputMask("0000AA; ")
@@ -384,6 +455,7 @@ class EndorsementCreateView(QWidget):
         lot_inline_layout.setContentsMargins(0, 0, 0, 0)
         lot_inline_layout.setSpacing(15)
         lot_inline_layout.addWidget(self.t_lotnumberwhole_input)
+
         lot_inline_layout.addWidget(self.t_use_whole_lot_checkbox)
 
         # --------------- wrapping the whole lot number in one widget -------------------
@@ -391,86 +463,127 @@ class EndorsementCreateView(QWidget):
         lot_input_widget.setLayout(lot_inline_layout)
 
         # return lot_input_widget
-        create_input_row("Whole Lot Number", lot_input_widget, "t_lotnumberwhole", "t_lotnumberwhole_error")
+        create_input_row(
+            "Lot Number", 
+            lot_input_widget, 
+            "t_lotnumberwhole", 
+            "t_lotnumberwhole_error",
+            parent=self
+        )
     
     def create_date_endorsed_row(
         self, 
-        create_input_row: Callable[[str, Union[QWidget, QLineEdit], str, str], None]
+        create_input_row: Callable[[str, Union[QWidget, QLineEdit], str, str, QWidget], None]
     ) -> None:
         # ------------------ self.t_date_endorsed_input = QDateEdit(calendarPopup=True) -------------------
         self.t_date_endorsed_input = ModifiedDateEdit(calendarPopup=True)
         self.t_date_endorsed_input.setDate(QDate.currentDate())
         self.t_date_endorsed_input.setObjectName("endorsement-date-endorsed-input")
 
-        create_input_row("Date Endorsed:", self.t_date_endorsed_input, "t_date_endorsed", "t_date_endorsed_error")
+        create_input_row(
+            "Date Endorsed:", 
+            self.t_date_endorsed_input, 
+            "t_date_endorsed", 
+            "t_date_endorsed_error",
+            parent=self
+        )
 
     def create_t_refno_row(
         self, 
-        create_input_row: Callable[[str, Union[QWidget, QLineEdit], str, str], None]
+        create_input_row: Callable[[str, Union[QWidget, QLineEdit], str, str, QWidget], None]
     ) -> None:
         self.t_refno_input = QLineEdit()
         self.t_refno_input.setObjectName("endorsement-refno-input")
         self.t_refno_input.setDisabled(True)
-
-        # ------------------ Excess checkbox -----------------------
-        self.has_excess_checkbox = QCheckBox("Has excess")
-        self.has_excess_checkbox.setObjectName("endorsement-has-excess-checkbox")
-
-        refno_container = QWidget()
-        refno_layout = QVBoxLayout(refno_container)
-        refno_layout.setContentsMargins(0, 0, 0, 0)
-        refno_layout.setSpacing(5)
-
-        refno_layout.addWidget(self.has_excess_checkbox)
-        refno_layout.addWidget(self.t_refno_input)
 
         try:
             session = self.Session()
             reference_num = fetch_current_t_refno_in_endorsement(session, self.endorsement_t1)
             
             self.t_refno_input.setText(reference_num)
-            create_input_row("Reference Number:", refno_container, "t_refno", "t_refno_error")   
+            create_input_row(
+                "Reference Number:", 
+                # refno_container, 
+                self.t_refno_input,
+                "t_refno", 
+                "t_refno_error",
+                parent=self
+            )   
         finally:
             session.close()
     
     def create_category_row(
         self, 
-        create_input_row: Callable[[str, Union[QWidget, QLineEdit], str, str], None]
+        create_input_row: Callable[[str, Union[QWidget, QLineEdit], str, str, QWidget], None]
     ) -> None:
         self.t_category_input = ModifiedComboBox()
         
         for category in CategoryEnum:
             self.t_category_input.addItem(category.value, category)
         
-        create_input_row("Category:", self.t_category_input, "t_category", "t_category_error")
+        create_input_row(
+            "Category:", 
+            self.t_category_input, 
+            "t_category", 
+            "t_category_error",
+            parent=self
+        )
     
     def create_prod_code_row(
         self, 
-        create_input_row: Callable[[str, Union[QWidget, QLineEdit], str, str], None]
+        create_input_row: Callable[[str, Union[QWidget, QLineEdit], str, str, QWidget], None]
     ) -> None:
         self.t_prodcode_input = ModifiedComboBox()
-        self.t_prodcode_input.addItems([
-            "PlaceholderTest1",
-            "PlaceholderTest2",
-            "PlaceholderTest3"
-        ])
+        self.t_prodcode_input.lineEdit().setPlaceholderText("Enter product code here...")
 
-        create_input_row("Product Code:", self.t_prodcode_input, "t_prodcode", "t_prodcode_error")
-    
+        create_input_row(
+            "Product Code:", 
+            self.t_prodcode_input, 
+            "t_prodcode", 
+            "t_prodcode_error",
+            parent=self
+        )
+
+        # SEARCH BEHAVIOUR
+        self.t_prodcode_input.lineEdit().textEdited.connect(self.on_prodcode_text_edited)
+            
     def create_weight_per_lot_row(
         self, 
-        create_input_row: Callable[[str, Union[QWidget, QLineEdit], str, str], None]
+        create_input_row: Callable[[str, Union[QWidget, QLineEdit], str, str, QWidget], None]
     ) -> None:
+        weight_per_lot_widget = QWidget()
+        weight_per_lot_layout = QHBoxLayout()
+
+        # ------------------ STYLING --------------------
+        weight_per_lot_layout.setContentsMargins(0, 0, 0, 0)
+        weight_per_lot_layout.setSpacing(15)
+        
+        # ------------------ Excess checkbox -----------------------
+        self.has_excess_checkbox = ModifiedCheckbox("Has excess")
+        self.has_excess_checkbox.setObjectName("endorsement-has-excess-checkbox")
+        
         self.t_wtlot_input = ModifiedDoubleSpinBox()
         self.t_wtlot_input.setMinimum(0.01) # Pydantic gt=0, so min here can be slightly above 0
         self.t_wtlot_input.setMaximum(999999999.99)
         self.t_wtlot_input.setDecimals(2)
+        self.t_wtlot_input.setObjectName("endorsement-wtlot-input")
 
-        create_input_row("Weight per Lot:", self.t_wtlot_input, "t_wtlot", "t_wtlot_error")
+        weight_per_lot_layout.addWidget(self.t_wtlot_input)
+        weight_per_lot_layout.addStretch()
+        weight_per_lot_layout.addWidget(self.has_excess_checkbox)
+
+        weight_per_lot_widget.setLayout(weight_per_lot_layout)
+        create_input_row(
+            "Weight per Lot:", 
+            weight_per_lot_widget,
+            "t_wtlot", 
+            "t_wtlot_error",
+            parent=self
+        )
 
     def create_qtykg_row(
         self, 
-        create_input_row: Callable[[str, Union[QWidget, QLineEdit], str, str], None]
+        create_input_row: Callable[[str, Union[QWidget, QLineEdit], str, str, QWidget], None]
     ) -> None:
         self.t_qtykg_input = ModifiedDoubleSpinBox()
         self.t_qtykg_input.setObjectName("endorsement-t-qtykg-input-spinbox")
@@ -478,21 +591,33 @@ class EndorsementCreateView(QWidget):
         self.t_qtykg_input.setMaximum(999999999.99)
         self.t_qtykg_input.setDecimals(2)
 
-        create_input_row("Quantity (kg):", self.t_qtykg_input, "t_qtykg", "t_qtykg_error")
+        create_input_row(
+            "Quantity (kg):", 
+            self.t_qtykg_input, 
+            "t_qtykg", 
+            "t_qtykg_error",
+            self
+        )
     
     def create_bag_input_row(
         self,
-        create_input_row: Callable[[str, Union[QWidget, QLineEdit], str, str], None]
+        create_input_row: Callable[[str, Union[QWidget, QLineEdit], str, str, QWidget], None]
     ) -> None:
-        self.t_bag_num_input = QSpinBox()
+        self.t_bag_num_input = ModifiedSpinBox()
         self.t_bag_num_input.setMinimum(0)
         self.t_bag_num_input.setMaximum(500)
 
-        create_input_row("Bag number:", self.t_bag_num_input, "t_bag_num", "t_bag_num_error")
+        create_input_row(
+            "Bag number:", 
+            self.t_bag_num_input, 
+            "t_bag_num", 
+            "t_bag_num_error",
+            parent=self
+        )
 
     def create_status_row(
         self, 
-        create_input_row: Callable[[str, Union[QWidget, QLineEdit], str, str], None]
+        create_input_row: Callable[[str, Union[QWidget, QLineEdit], str, str, QWidget], None]
     ) -> None:
         self.t_status_input = ModifiedComboBox()
         self.t_status_input.setObjectName("endorsement-create-status-input")
@@ -504,11 +629,17 @@ class EndorsementCreateView(QWidget):
 
         #  ---------------------- disable the status so that the user cannot change the combox box value ---------------------
         self.t_status_input.setDisabled(True)
-        create_input_row("Status:", self.t_status_input, "t_status", "t_status_error")
+        create_input_row(
+            "Status:", 
+            self.t_status_input, 
+            "t_status", 
+            "t_status_error",
+            parent=self
+        )
 
     def create_endorsed_by_input_row(
         self, 
-        create_input_row: Callable[[str, Union[QWidget, QLineEdit], str, str], None]
+        create_input_row: Callable[[str, Union[QWidget, QLineEdit], str, str, QWidget], None]
     ) -> None:
         self.t_endorsed_by_input = ModifiedComboBox()
         session = self.Session()
@@ -522,20 +653,120 @@ class EndorsementCreateView(QWidget):
 
                 self.t_endorsed_by_input.addItem(displayed_user_text)
 
-            create_input_row("Endorsed By:", self.t_endorsed_by_input, "t_endorsed_by", "t_endorsed_by_error")
+            create_input_row(
+                "Endorsed By:", 
+                self.t_endorsed_by_input, 
+                "t_endorsed_by", 
+                "t_endorsed_by_error",
+                parent=self
+            )
         finally:
             session.close()
     
     def create_remarks_input_row(
         self,
-        create_input_row: Callable[[str, Union[QWidget, QLineEdit], str, str], None]
+        create_input_row: Callable[[str, Union[QWidget, QLineEdit], str, str, QWidget], None]
     ) -> None:
         self.t_remarks_by_input = ModifiedComboBox()
         
         for remark in RemarksEnum:
             self.t_remarks_by_input.addItem(remark.value, remark)
 
-        create_input_row("Remarks:", self.t_remarks_by_input, "t_remarks", "t_remarks_error")
+        create_input_row(
+            "Remarks:", 
+            self.t_remarks_by_input, 
+            "t_remarks", 
+            "t_remarks_error",
+            parent=self
+        )
+
+    def _update_combobox(self, text: str, codes: list):
+        current_text = self.t_prodcode_input.currentText()
+        cursor_pos = self.t_prodcode_input.lineEdit().cursorPosition()
+
+        self.t_prodcode_input.blockSignals(True)
+        self.t_prodcode_input.model().removeRows(0, self.t_prodcode_input.count())
+        self.t_prodcode_input.addItems(codes)
+        self.t_prodcode_input.setCurrentText(current_text)
+        self.t_prodcode_input.lineEdit().setCursorPosition(cursor_pos)
+        self.t_prodcode_input.blockSignals(False)
+
+        self.t_prodcode_input._completer_model.setStringList(codes)
+
+    def on_prodcode_text_edited(self, text: str) -> None:
+        if not text or len(text) < 2:
+            self.t_prodcode_input.setCompleter(None)  # Disable completer temporarily
+            
+            return 
+
+        # --------- TRY TO FETCH PRODCODE DATA FROM THE JSON CACHE FIRST BEFORE ACCESSING THE DATABASE ----------
+        cached_codes = self.load_codes_from_cache()
+        filtered_codes = [code for code in cached_codes if text.lower() in code.lower()]
+
+        if filtered_codes:
+            self._update_combobox(text, filtered_codes)
+            QTimer.singleShot(100, lambda: self.t_prodcode_input.showPopup())
+            self.db_fetch_timer.stop()
+            
+            return
+
+        # Delayed DB fetch only if cache has no match
+        self.pending_db_text = text
+        self.db_fetch_timer.start(10000)
+    
+    def _fetch_codes_from_database(self):
+        """
+        THIS WILL HAPPEN IF THE USER TYPES A ENTRY ON THE PRODCODE AND 
+        DOESN'T RECOGNIZE IT FROM THE JSON FILE. IT WILL FETCH THE DATA 
+        DIRECTLY ON THE DATABASE
+        """
+        text = self.pending_db_text
+        
+        if not text:
+            return
+
+        try:
+            session_factory_prodcode = create_session(prodcode_engine)
+            session = session_factory_prodcode()
+
+            metadata = MetaData()
+            product_code_table = Table("tbl_prod01", metadata, autoload_with=prodcode_engine)
+            prodcode_col = product_code_table.columns["T_PRODCODE"]
+
+            stmt = (
+                select(prodcode_col.distinct())
+                .where(prodcode_col.ilike(f"%{text}%"))
+                .limit(3000)
+            )
+
+            results = session.execute(stmt).fetchall()
+            db_codes = [row[0] for row in results]
+
+            if not db_codes:
+                return  # Nothing found even in DB, don't update dropdown or cache
+
+            # Load current cached codes
+            cached_codes = set(self.load_codes_from_cache())
+
+            # Only codes that were NOT in the cache
+            new_codes = [code for code in db_codes if code not in cached_codes]
+
+            if new_codes:
+                # Merge and save back to JSON
+                updated_codes = sorted(cached_codes.union(new_codes))
+                self.save_codes_to_cache(updated_codes)
+
+            # Proceed to update dropdown regardless
+            self._update_combobox(text, db_codes)
+            QTimer.singleShot(100, lambda: self.t_prodcode_input.showPopup())
+
+        except Exception as e:
+            print(f"Error fetching product codes from DB: {e}")
+            traceback.print_exc()
+        finally:
+            session.close()
+
+    
 
     def get_form_data(self) -> Dict[str, Union[str, int, bool, float, Any]]:
         """Collects data from UI widgets and returns it as a dictionary."""
@@ -551,219 +782,173 @@ class EndorsementCreateView(QWidget):
             "t_status": self.t_status_input.currentData(), # Retrieves the stored Enum object
             "t_endorsed_by": self.t_endorsed_by_input.currentText(),
             "t_has_excess": self.has_excess_checkbox.isChecked(),
-            "t_bag_num": self.t_bag_num_input.value(),
+            "t_bag_num": self.t_bag_num_input.value(), # this is being excluded if this is a fresh
             "t_remarks": self.t_remarks_by_input.currentText()
         }
 
     def clear_error_messages(self):
         """Clears all displayed error messages."""
-        valid_instance = (
-            QLineEdit,
-            QComboBox,
-            QDateEdit,
-            # QDoubleSpinBox,
-            ModifiedComboBox,
-            ModifiedDateEdit,
-            ModifiedDoubleSpinBox,
-        )
-
-        # CLEAR THE LOT NUMBER WHOLE STYLE SHEET
-        self.t_lotnumberwhole_input.setStyleSheet("")
-
-        for key in self.form_fields:
+        for key in list(self.form_fields.keys()):
+            
             if key.endswith("_error"):
                 self.form_fields[key].setText("")
-                # Optionally reset styling
                 field_name = key.replace("_error", "")
                 
-                if field_name in self.form_fields and isinstance(self.form_fields[field_name], valid_instance):
-                    self.form_fields[field_name].setStyleSheet("") # Clear any red borders etc.
+                if field_name in self.form_fields:
+                    self.form_fields[field_name].setStyleSheet("")
                 
-
     def display_errors(self, errors):
         """Displays validation errors next to the corresponding fields."""
         self.clear_error_messages()  # Clear previous errors first
 
         for error in errors:
-            # ---------------- Handle both field-specific and model-level errors --------------------
+            # Handle both field-specific and model-level errors
             if error["loc"]:
-                field = error["loc"][0]  # 'loc' is a tuple, first element is the field name
+                field = error["loc"][0]  # Get the field name
                 message = error["msg"]
                 
+                # Special handling for production code errors
+                if field == "t_prodcode":
+                    error_label_key = "t_prodcode_error"
+                    
+                    if error_label_key in self.form_fields:
+                        self.form_fields[error_label_key].setText(message)
+                        self.form_fields["t_prodcode"].setStyleSheet("border: 1px solid red;")
+                    continue
+                    
+                # Default handling for other fields
                 error_label_key = f"{field}_error"
-                
                 if error_label_key in self.form_fields:
                     self.form_fields[error_label_key].setText(message)
                     
-                    # ------------- Optionally, highlight the input field itself ----------------
-                    input_widget = self.form_fields.get(field)
-                    
-                    if input_widget:
-                        input_widget.setStyleSheet("border: 1px solid red;")
-                else:
-                    print(f"Warning: No error label found for field '{field}'. Error: {message}")
-            else:
-                # -------------- Model-level error - show it in a general way (e.g., in quantity field) -------------
-                message = error["msg"]
+                    if field in self.form_fields:
+                        self.form_fields[field].setStyleSheet("border: 1px solid red;")
 
-                if "Quantity" in message:
-                    self.show_quantity_error(message)
-                elif "Lot range" in message or "overlaps with existing lot" in message:
-                    # Display it next to the lot number field
-                    error_label_key = "t_lotnumberwhole_error"
+    def set_message_existing_record(self, endorsement_t2_existing_model: Type[DeclarativeMeta]) -> str:
+        endorsement_parent_record = endorsement_t2_existing_model.endorsement_parent
 
-                    if error_label_key in self.form_fields:
-                        self.form_fields[error_label_key].setText(message)
-                        # self.t_lotnumberwhole_input.setStyleSheet("border: 1px solid red;")
-                else:
-                    # Fallback - show in status bar or as a message box
-                    StyledMessageBox.warning(self, "Validation Error", message)
-                    return
+        # ------------------ Handle enum display cleanly ---------------------
+        category = (
+            endorsement_parent_record.t_category.value
+            if hasattr(endorsement_parent_record.t_category, "value")
+            else str(endorsement_parent_record.t_category)
+        )
+        status = (
+            endorsement_parent_record.t_status.value
+            if hasattr(endorsement_parent_record.t_status, "value")
+            else str(endorsement_parent_record.t_status)
+        )
+
+        # -------------- THIS WILL BE DISPLAYED IN THE TEXT IN THE QMESSAGEBOX ----------------
+        message = (
+            f"<br><br><b>Reference Number:</b> {endorsement_t2_existing_model.t_refno}<br>"
+            f"<b>Production Code:</b> {endorsement_parent_record.t_prodcode}<br>"
+            f"<b>Date Endorsed:</b> {endorsement_parent_record.t_date_endorsed.strftime('%Y-%m-%d')}<br>"
+            f"<b>Category:</b> {category}<br>"
+            f"<b>Quantity:</b> {endorsement_t2_existing_model.t_qty}<br>"
+            f"<b>Lot Number (Single):</b> {endorsement_t2_existing_model.t_lotnumbersingle}<br>"
+            f"<b>Lot Number (Whole):</b> {endorsement_parent_record.t_lotnumberwhole}<br>"
+            f"<b>Endorsed By:</b> {endorsement_parent_record.t_endorsed_by}<br>"
+            f"<b>Status:</b> {status}<br><br>"
+        )
+
+        return message
 
     def save_endorsement(self):
         """Collects form data, validates it using Pydantic, and handles the result."""
-        self.clear_error_messages() # Clear all errors before re-validation
-        
+        # ----------------- Clear all errors before re-validation -------------------
+        self.clear_error_messages() 
         form_data = self.get_form_data()
         
         try:
             # start the session here
             session = self.Session()
 
-            # -------------------Validate the data using your Pydantic schema ---------------------
-            # ---------- SET THE SESSION HERE IN FOR THE SCHEMA ------------
-            # EndorsementFormSchema.set_db_session(session)
-
-            # ---------- SET THE FORM SCHEMA VALIDATION HERE --------------
-            # validated_data = EndorsementFormSchema(**form_data)
+            # ---------- Validate the data using your Pydantic schema --------------
             validated_data = self.endorsement_form_schema.validate_with_session(
                 form_data, 
                 session,
                 endorsement_model_t1=self.endorsement_t1,
-                endorsement_model_t2=self.enodrsement_t2
+                endorsement_model_t2=self.endorsement_t2
             )
 
             # --------------------------------------------------------------------------
             # before passing the validated form in the endorsement model check first if the data is already existing on the database
             
             # NOTE: IS_LOT_EXISTING_T2 HANDLES THE PART IF THE LOT NUMBER WAS PREVIOUSLY ENTERED AS A WHOLE LOT NUMBER
-            # is_lot_existing_in_t1 = session.query(EndorsementModel).filter(
-            #     EndorsementModel.t_lotnumberwhole == validated_data.t_lotnumberwhole
-            # ).first()
-
-            is_lot_existing_t2 = session.query(self.enodrsement_t2).filter(
-                self.enodrsement_t2.t_lotnumbersingle == validated_data.t_lotnumberwhole
+            is_lot_existing_t2 = session.query(self.endorsement_t2).filter(
+                self.endorsement_t2.t_lotnumbersingle == validated_data.t_lotnumberwhole
             ).first()
 
             if is_lot_existing_t2:
-                # TODO:
-                # PROMPT THE USER THAT AN ITEM IS ALREADY EXISTING ON THE DATABASE
-                # CREATE A MESSAGE BOX TELLING THE EXISTING DATA ON THE USER
-                # CREATE A FUNCTION HERE THAT OMITS THE WHOLE ENTRY AND JUST UPDATE THE t_qtykg on the endorsement table 1
-                # ADD A LOGIC FOR CHECKING THE LOT NUMBER INSIDE THE LOT NUMBER 2 AS WELL
-                # CREATE A BAG NUMBER MODEL IN THE DATABASE (DONE)
-                # FIX THE CODE LOGIC HERE
-                
-                # NOTE: HERE INSTEAD OF ITERATING A THE COLUMNS JUST MAKE A COPY OF THE VALIDATED DATA THEN CREATE THE MESSAGE BOX FROM THERE. 
-                # JUST USE THE is_lot_existing_t2.endorsement_parent to specify the columns from endorsement_table_1
-                details = {}
-                for column in self.enodrsement_t2.__table__.columns:
-                    key = column.name
-                    
-                    if key in (("t_refno", "t_lotnumbersingle", "t_qty")):
-                        value = getattr(is_lot_existing_t2, key)
-                        
-                        details[key] = value
-                
-                # --------- UPDATE THE KEY NAMES HERE FOR USER TO SEE --------
-                # NOTE: THAT IF THE COLUMNS BECOME BIG ITERATE THRU IT
-                details["Reference No"] = details.pop("t_refno")
-                details["Lot Number"] = details.pop("t_lotnumbersingle")
-                details["Quantity"] = details.pop("t_qty") 
-
-                # -------- UPDATE THE DATA HERE --------
-                details.update({
-                    "Weight Per Lot": is_lot_existing_t2.endorsement_parent.t_wtlot,
-                    "Date Endorsed": is_lot_existing_t2.endorsement_parent.t_date_endorsed.isoformat(),
-                    "Has Excess": is_lot_existing_t2.endorsement_parent.t_has_excess,
-                    "Endorsed By": is_lot_existing_t2.endorsement_parent.t_endorsed_by
-                })
-
-                details_str = json.dumps(details, indent=4, default=str)
-                
-                TerminalCustomStylePrint.terminal_message_custom_format(
-                    details_str
-                )
-
+                string_representation = self.set_message_existing_record(is_lot_existing_t2)
                 ans_res = StyledMessageBox.question(
                     self,
                     "Lot number is already existing",
-                    f"The following lot already exists in the database:\n\n{details_str}\n\n"
-                    "Are you sure you want to continue?"
+                    f"The following lot already exists in the database:\n\n{string_representation}\n\n"
+                    "Are you sure you want to continue?",
+                    setTextFormat=True
                 )
 
-                # make this into a method function in this class
                 if ans_res == StyledMessageBox.StandardButton.Yes:
-                    # TODO: if the prompt is yes. omit the lotnumber input of the user. And update the qty of the existing lot number
-                    
-                    # fetch the details variable here
+                    # ------------ Fetch the endorsement parent related to the result --------------
+                    endorsement_parent = is_lot_existing_t2.endorsement_parent
 
-                    # UPDATE THE VALUE HERE OF THE QTY IN THE MAIN ENDORSEMENT TABLE 1
-                    # increment the value here
-                    # is_lot_existing_in_t1.t_qtykg += validated_data.t_qtykg
+                    # ------------ UPDATE THE VALUE HERE OF THE QTY IN THE MAIN ENDORSEMENT TABLE 1 ---------
+                    # ------------- INCREMENT THE VALUE HERE -------------
+                    endorsement_parent.t_qtykg += validated_data.t_qtykg
 
-                    # CREATE A NEW OBJECT ON THE ENDORSEMENT TABLE 2 WITH THAT DATA.
-                    # NOTE: THAT THE ENDORSEMENT REFERENCE NUMBER SHOULD BE THE is_lot_existing_t1.ref_no
-                    # SHOULD BE A SINGLE ENTRY 
-                    # endorsement_t2 = EndorsementModelT2(
-                        
-                    # )
-                    # insert_existing_lot_t2("test")
+                    # ---------------- SPECIFY ON THE is_lot_existing_t2 on the is_lot_number_entered column and set it to true --------------------
+                    is_lot_existing_t2.is_lot_number_entered = True
 
-                    print("User clicked Yes")
-                    
-                    # remove the return statement here after
-                    return
+                    t2_new_instance = self.endorsement_t2(
+                        t_refno=is_lot_existing_t2.t_refno,
+                        t_lotnumbersingle=validated_data.t_lotnumberwhole,
+                        t_qty=validated_data.t_qtykg,
+                        is_lot_number_entered=True
+                    )
+
+                    # endorsement_t2_items from endorsement t1 is a collection of related reference number
+                    endorsement_parent.endorsement_t2_items.append(t2_new_instance)
+                    session.add(t2_new_instance)
                 elif ans_res == StyledMessageBox.StandardButton.No:
-                    print("User clicked No")
+                    session.rollback()
 
-                    # end the process immedietly here 
-                    # NOTE: that if the user presses the x button on the question box it is interpreted as 'No' as well
-                    return
-
-            else:
-                # if the lot is not existing just proceed as expected. 
-                # and just proceed in including it in the database.
-                print(False)
-
-                # print(validated_data.model_dump_json(indent=2)) 
-                # ------------- if the form is valid store this in the database. ---------------------
-                endorsement = self.endorsement_t1(**validated_data.model_dump())
+                    StyledMessageBox.information(
+                        self,
+                        "Transaction Cancelled",
+                        "Transaction has been cancelled"
+                    )
                     
-                populate_endorsement_items(
-                    endorsement_model=endorsement,
-                    endorsement_model_t2=self.enodrsement_t2,
-                    endorsement_lot_excess_model=self.endorsement_lot_excess,
-                    validated_data=validated_data,
-                    category=self.t_category_input.currentText(),
-                    has_excess=self.has_excess_checkbox.isChecked()
-                )
+                    return
+                
+            # move here the populate_endorsement_items
+            endorsement = self.endorsement_t1(**validated_data.model_dump(exclude={"t_bag_num"}))
+                
+            # NOTE: This can be a @staticmethod here in the class but it is way too long that's why I move it to helpers.py file
+            populate_endorsement_items(
+                endorsement_model=endorsement,
+                endorsement_model_t2=self.endorsement_t2,
+                endorsement_lot_excess_model=self.endorsement_lot_excess,
+                validated_data=validated_data,
+                category=self.t_category_input.currentText(),
+                has_excess=self.has_excess_checkbox.isChecked()
+            )
 
-                session.add(endorsement)
-
-            # --------------------------------------------------------------------------
+            session.add(endorsement)
 
             # ---------------- commit the changes if all transaction in the try block is valid ----------------
             session.commit()
         except ValueError as e:
-            # self.form_fields["t_lotnumberwhole_error"].setText(str(e))
-            # print(type(e))
-            # print(len(e.errors()))
-            # print(e.errors()[0]["msg"])
-            error_message_instance = e.errors()[0]["msg"]
+            # THIS VALUE ERROR MESSAGE SHOULD MATCH THE ALIGNMENT ON THE ENDORSEMENT FORM SCHEMA
+            error_instance = e.errors()[0]["msg"]
 
-            self.form_fields["t_lotnumberwhole_error"].setText(error_message_instance)
-            self.t_lotnumberwhole_input.setStyleSheet("border: 1px solid red;")
+            if "Production code must be GTE 16" in str(e):
+                self.form_fields["t_prodcode_error"].setText(error_instance)
+                self.form_fields["t_prodcode"].setStyleSheet("border: 1px solid red;")
+            else:
+                self.form_fields["t_lotnumberwhole_error"].setText(error_instance)
+                self.form_fields["t_lotnumberwhole"].setStyleSheet("border: 1px solid red;")
             session.rollback()
         except ValidationError as e:            
             self.display_errors(e.errors())
@@ -773,6 +958,7 @@ class EndorsementCreateView(QWidget):
                 "Validation Error",
                 "Please correct the errors in the form"
             )
+
             session.rollback()
         except IntegrityError as e:
             StyledMessageBox.critical(
@@ -783,11 +969,13 @@ class EndorsementCreateView(QWidget):
             session.rollback()
 
         except Exception as e:
+            print(e)
             StyledMessageBox.critical(
                 self,
                 "Error",
                 f"An unexpected error occurred: {e}"
             )
+            traceback.print_exc()
             session.rollback()
         else:
             StyledMessageBox.information(
@@ -834,13 +1022,15 @@ class EndorsementCreateView(QWidget):
         
         # ---------- Clear endorsed by ----------
         self.t_endorsed_by_input.clearEditText()
+
+        # ---------- Clear endorsed by ----------
+        self.has_excess_checkbox.setChecked(False)
         
         # ------------ Clear error messages ---------------
         self.clear_error_messages()
 
     def apply_styles(self):
         button_cursor_pointer(self.save_button)
-
         current_dir = os.path.dirname(__file__)
         qss_path = os.path.join(current_dir, "..", "styles", "endorsement.css")
         qss_path = os.path.abspath(qss_path)

@@ -20,4 +20,5 @@ if __name__ == "__main__":
 
         sys.exit(app.exec())
     else:
+        print("Database not connected")
         sys.exit(1)

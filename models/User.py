@@ -16,12 +16,38 @@ from constants.Enums import Department, UserRole
 class User(Base):
     __tablename__ = "users"
 
-    user_id = Column(Integer, primary_key=True, autoincrement=True)
-    username = Column(String(50), nullable=False)
-    password = Column(String, nullable=False)
-    workstation_name = Column(String(40), nullable=True)
-    role = Column(Enum(UserRole), nullable=False, default=UserRole.USER)
-    department = Column(Enum(Department), nullable=False)
+    user_id = Column(
+        Integer, 
+        primary_key=True, 
+        autoincrement=True,
+        comment="Unique identifier for the user. Automatically increments."
+    )
+    username = Column(
+        String(50), 
+        nullable=False,
+        comment="Unique username for authentication. Required field."
+    )
+    password = Column(
+        String, 
+        nullable=False,
+        comment="Hashed password for user authentication. Stored using secure hashing."
+    )
+    workstation_name = Column(
+        String(40), 
+        nullable=True,
+        comment="Optional identifier for the user's primary workstation or device."
+    )
+    role = Column(
+        Enum(UserRole), 
+        nullable=False, 
+        default=UserRole.USER,
+        comment="User's permission level (e.g., ADMIN, USER). Defaults to USER."
+    )
+    department = Column(
+        Enum(Department), 
+        nullable=False,
+        comment="Organizational department the user belongs to (e.g., IT, HR, PRODUCTION)."
+    )
 
 
     # reverse relationship to the auth_logs
@@ -40,13 +66,39 @@ class User(Base):
 class AuthLog(Base):
     __tablename__ = "auth_logs"
     
-    log_id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey("users.user_id", ondelete="CASCADE"), nullable=True)
-    username = Column(String(50))  # kept in case user is deleted
-    event_type = Column(String(50))  # LOGIN, AUTH_ATTEMPT, LOGOUT, etc.
-    status = Column(String(10))     # SUCCESS, FAIL
-    additional_info = Column(String(255), nullable=True)
-    timestamp = Column(DateTime(timezone=True), server_default=func.now())
+    log_id = Column(
+        Integer, 
+        primary_key=True,
+        comment="Primary key identifier for the log entry."
+    )
+    user_id = Column(
+        Integer, 
+        ForeignKey("users.user_id", ondelete="CASCADE"), 
+        nullable=True,
+        comment="References the user who triggered the event. Nullable if user is deleted."
+    )
+    username = Column(
+        String(50),
+        comment="Stores the username at the time of the event (for auditing even if user is deleted)."
+    ) 
+    event_type = Column(
+        String(50),
+        comment="Type of event (e.g., LOGIN, AUTH_ATTEMPT, LOGOUT, PASSWORD_RESET)."
+    ) 
+    status = Column(
+        String(10),
+        comment="Outcome of the event: SUCCESS or FAIL."
+    )   
+    additional_info = Column(
+        String(255), 
+        nullable=True,
+        comment="Additional context (e.g., IP address, failure reason, device info)."
+    )
+    timestamp = Column(
+        DateTime(timezone=True), 
+        server_default=func.now(),
+        comment="Timestamp of when the event was logged (automatically set to current time)."
+    )
 
     # reverse relationship to the User
     ### NOTE: SAMPLE ###
